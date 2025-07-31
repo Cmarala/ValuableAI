@@ -264,50 +264,142 @@ try {
         }
     }
     
-    # Version Information
-    $versionInfo = $xmlDoc.CreateElement("VersionInformation")
-    $pageInfo.AppendChild($versionInfo) | Out-Null
+    # Web Parts Information
+    $webPartsInfo = $xmlDoc.CreateElement("WebPartsInformation")
+    $pageInfo.AppendChild($webPartsInfo) | Out-Null
     
-    if ($page -and $page["_UIVersionString"]) {
-        $versionInfo.AppendChild($xmlDoc.CreateElement("UIVersion")).InnerText = $page["_UIVersionString"].ToString()
-    }
-    if ($page -and $page["_UIVersion"]) {
-        $versionInfo.AppendChild($xmlDoc.CreateElement("VersionNumber")).InnerText = $page["_UIVersion"].ToString()
-    }
-    
-    # Get version history
+    Write-Host "Retrieving web parts information..." -ForegroundColor Yellow
     try {
-        $versions = Get-PnPFileVersion -Url $PageUrl
-        if ($versions) {
-            $versionHistory = $xmlDoc.CreateElement("VersionHistory")
-            $versionInfo.AppendChild($versionHistory) | Out-Null
+        # Get web parts from the page
+        $webParts = Get-PnPClientSideComponent -Page $pageFile.Name -ErrorAction SilentlyContinue
+        
+        if ($webParts -and $webParts.Count -gt 0) {
+            Write-Host "Found $($webParts.Count) web parts" -ForegroundColor Green
             
-            foreach ($version in $versions) {
+            # Group web parts by section/zone
+            $webPartsByZone = @{}
+            
+            foreach ($webPart in $webParts) {
                 try {
-                    $versionElement = $xmlDoc.CreateElement("Version")
-                    $versionHistory.AppendChild($versionElement) | Out-Null
+                    $zoneIndex = if ($webPart.Section -ne $null) { $webPart.Section } else { "0" }
+                    $columnIndex = if ($webPart.Column -ne $null) { $webPart.Column } else { "0" }
+                    $zoneKey = "Section_$zoneIndex" + "_Column_$columnIndex"
                     
-                    if ($version.VersionLabel) {
-                        $versionElement.SetAttribute("VersionLabel", $version.VersionLabel)
+                    if (-not $webPartsByZone.ContainsKey($zoneKey)) {
+                        $webPartsByZone[$zoneKey] = @()
                     }
-                    if ($version.Size) {
-                        $versionElement.SetAttribute("Size", $version.Size.ToString())
-                    }
-                    if ($version.Created) {
-                        $versionElement.SetAttribute("Created", $version.Created.ToString("yyyy-MM-ddTHH:mm:ssZ"))
-                    }
-                    if ($version.CreatedBy -and $version.CreatedBy.LookupValue) {
-                        $versionElement.SetAttribute("CreatedBy", $version.CreatedBy.LookupValue)
-                    }
+                    $webPartsByZone[$zoneKey] += $webPart
                 }
                 catch {
-                    Write-Warning "Could not process version: $($_.Exception.Message)"
+                    Write-Warning "Could not process web part: $($_.Exception.Message)"
                 }
+            }
+            
+            # Create XML structure for web parts by zone
+            foreach ($zone in $webPartsByZone.Keys) {
+                $zoneElement = $xmlDoc.CreateElement("WebPartZone")
+                $webPartsInfo.AppendChild($zoneElement) | Out-Null
+                $zoneElement.SetAttribute("Name", $zone)
+                
+                foreach ($webPart in $webPartsByZone[$zone]) {
+                    try {
+                        $webPartElement = $xmlDoc.CreateElement("WebPart")
+                        $zoneElement.AppendChild($webPartElement) | Out-Null
+                        
+                        if ($webPart.Title) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("Title")).InnerText = $webPart.Title
+                        }
+                        if ($webPart.InstanceId) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("InstanceId")).InnerText = $webPart.InstanceId.ToString()
+                        }
+                        if ($webPart.WebPartType) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartType")).InnerText = $webPart.WebPartType
+                        }
+                        if ($webPart.Order) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("Order")).InnerText = $webPart.Order.ToString()
+                        }
+                        if ($webPart.Section) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("Section")).InnerText = $webPart.Section.ToString()
+                        }
+                        if ($webPart.Column) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("Column")).InnerText = $webPart.Column.ToString()
+                        }
+                        
+                        # Get web part properties if available
+                        if ($webPart.PropertiesJson) {
+                            $propertiesElement = $xmlDoc.CreateElement("Properties")
+                            $webPartElement.AppendChild($propertiesElement) | Out-Null
+                            $propertiesElement.InnerText = $webPart.PropertiesJson
+                        }
+                    }
+                    catch {
+                        Write-Warning "Could not process web part details: $($_.Exception.Message)"
+                    }
+                }
+            }
+        }
+        else {
+            # Try alternative method for classic pages
+            Write-Host "No modern web parts found, trying classic web parts..." -ForegroundColor Yellow
+            try {
+                # For classic pages, try to get web part manager
+                $classicWebParts = Get-PnPWebPart -ServerRelativePageUrl $pageFile.ServerRelativeUrl -ErrorAction SilentlyContinue
+                
+                if ($classicWebParts -and $classicWebParts.Count -gt 0) {
+                    Write-Host "Found $($classicWebParts.Count) classic web parts" -ForegroundColor Green
+                    
+                    foreach ($webPart in $classicWebParts) {
+                        try {
+                            $zoneElement = $xmlDoc.CreateElement("WebPartZone")
+                            $webPartsInfo.AppendChild($zoneElement) | Out-Null
+                            
+                            if ($webPart.ZoneId) {
+                                $zoneElement.SetAttribute("Name", $webPart.ZoneId)
+                            } else {
+                                $zoneElement.SetAttribute("Name", "UnknownZone")
+                            }
+                            
+                            $webPartElement = $xmlDoc.CreateElement("WebPart")
+                            $zoneElement.AppendChild($webPartElement) | Out-Null
+                            
+                            if ($webPart.WebPart -and $webPart.WebPart.Title) {
+                                $webPartElement.AppendChild($xmlDoc.CreateElement("Title")).InnerText = $webPart.WebPart.Title
+                            }
+                            if ($webPart.Id) {
+                                $webPartElement.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $webPart.Id.ToString()
+                            }
+                            if ($webPart.WebPart -and $webPart.WebPart.GetType()) {
+                                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartType")).InnerText = $webPart.WebPart.GetType().Name
+                            }
+                            if ($webPart.ZoneIndex) {
+                                $webPartElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $webPart.ZoneIndex.ToString()
+                            }
+                        }
+                        catch {
+                            Write-Warning "Could not process classic web part: $($_.Exception.Message)"
+                        }
+                    }
+                }
+                else {
+                    Write-Host "No classic web parts found either" -ForegroundColor Yellow
+                    $noWebPartsElement = $xmlDoc.CreateElement("Message")
+                    $webPartsInfo.AppendChild($noWebPartsElement) | Out-Null
+                    $noWebPartsElement.InnerText = "No web parts found on this page"
+                }
+            }
+            catch {
+                Write-Warning "Could not retrieve classic web parts: $($_.Exception.Message)"
+                $errorElement = $xmlDoc.CreateElement("Error")
+                $webPartsInfo.AppendChild($errorElement) | Out-Null
+                $errorElement.InnerText = "Error retrieving web parts: $($_.Exception.Message)"
             }
         }
     }
     catch {
-        Write-Warning "Could not retrieve version history: $($_.Exception.Message)"
+        Write-Warning "Could not retrieve web parts: $($_.Exception.Message)"
+        $errorElement = $xmlDoc.CreateElement("Error")
+        $webPartsInfo.AppendChild($errorElement) | Out-Null
+        $errorElement.InnerText = "Error retrieving web parts: $($_.Exception.Message)"
     }
     
     # Generate output filename with timestamp
@@ -343,8 +435,15 @@ try {
         Write-Host "Custom Fields Found: $($customFields.ChildNodes.Count)" -ForegroundColor White
     }
     
-    if ($versions) {
-        Write-Host "Version History: $($versions.Count) versions" -ForegroundColor White
+    if ($webPartsInfo -and $webPartsInfo.ChildNodes.Count -gt 0) {
+        $webPartCount = 0
+        foreach ($zone in $webPartsInfo.ChildNodes) {
+            if ($zone.Name -eq "WebPartZone") {
+                $webPartCount += $zone.ChildNodes.Count
+            }
+        }
+        Write-Host "Web Parts Found: $webPartCount" -ForegroundColor White
+        Write-Host "Web Part Zones: $($webPartsInfo.SelectNodes('WebPartZone').Count)" -ForegroundColor White
     }
     
     Write-Host "`nXML file saved to: $outputPath" -ForegroundColor Yellow
