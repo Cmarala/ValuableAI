@@ -138,11 +138,16 @@ try {
         if ($wp.Id) {
             $webPartElement.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $wp.Id.ToString()
         }
+        
+        # Zone Information
+        $zoneInfoElement = $xmlDoc.CreateElement("ZoneInformation")
+        $webPartElement.AppendChild($zoneInfoElement) | Out-Null
+        
         if ($wp.ZoneId) {
-            $webPartElement.AppendChild($xmlDoc.CreateElement("ZoneId")).InnerText = $wp.ZoneId
+            $zoneInfoElement.AppendChild($xmlDoc.CreateElement("ZoneId")).InnerText = $wp.ZoneId
         }
         if ($wp.ZoneIndex -ne $null) {
-            $webPartElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $wp.ZoneIndex.ToString()
+            $zoneInfoElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $wp.ZoneIndex.ToString()
         }
         
         # Web part object properties
@@ -173,30 +178,52 @@ try {
                 $xmlDoc2 = New-Object System.Xml.XmlDocument
                 $xmlDoc2.LoadXml($webPartXml)
                 
-                # Detect web part type
-                $webPartType = "Unknown"
+                # Detect web part format and type
+                $webPartFormat = "Unknown"
                 $actualTypeName = $null
+                $partOrder = $null
+                $zoneIdFromXml = $null
                 
-                # Check for v2 format (ContentEditor style)
-                $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
-                if ($typeNameNodes.Count -gt 0) {
-                    $actualTypeName = $typeNameNodes[0].InnerText
-                    $webPartType = "WebPart_v2"
-                    Write-Host "  Found v2 WebPart: $actualTypeName" -ForegroundColor Green
+                # Check for v2 format (ContentEditor style) - root element WebPart with v2 namespace
+                $v2RootNodes = $xmlDoc2.SelectNodes("//*[local-name()='WebPart' and namespace-uri()='http://schemas.microsoft.com/WebPart/v2']")
+                if ($v2RootNodes.Count -gt 0) {
+                    $webPartFormat = "WebPart_v2"
+                    $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                    if ($typeNameNodes.Count -gt 0) {
+                        $actualTypeName = $typeNameNodes[0].InnerText
+                        Write-Host "  Found v2 WebPart: $actualTypeName" -ForegroundColor Green
+                    }
+                    # Extract PartOrder and ZoneID from v2 XML
+                    $partOrderNodes = $xmlDoc2.SelectNodes("//PartOrder")
+                    if ($partOrderNodes.Count -gt 0) {
+                        $partOrder = $partOrderNodes[0].InnerText
+                    }
+                    $zoneIdNodes = $xmlDoc2.SelectNodes("//ZoneID")
+                    if ($zoneIdNodes.Count -gt 0) {
+                        $zoneIdFromXml = $zoneIdNodes[0].InnerText
+                    }
                 }
-                # Check for v3 format (ListView style)
-                elseif ($xmlDoc2.SelectNodes("//webParts").Count -gt 0 -or $xmlDoc2.SelectNodes("//webPart").Count -gt 0) {
+                # Check for v3 format (ListView style) - webParts/webPart structure
+                elseif ($xmlDoc2.SelectNodes("//webParts/webPart").Count -gt 0) {
+                    $webPartFormat = "webPart_v3"
                     $typeNodes = $xmlDoc2.SelectNodes("//type/@name")
                     if ($typeNodes.Count -gt 0) {
                         $actualTypeName = $typeNodes[0].Value
-                        $webPartType = "webPart_v3"
                         Write-Host "  Found v3 webPart: $actualTypeName" -ForegroundColor Green
                     }
                 }
                 
-                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartFormat")).InnerText = $webPartType
+                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartFormat")).InnerText = $webPartFormat
                 if ($actualTypeName) {
                     $webPartElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
+                }
+                
+                # Add additional zone information from XML
+                if ($partOrder) {
+                    $zoneInfoElement.AppendChild($xmlDoc.CreateElement("PartOrder")).InnerText = $partOrder
+                }
+                if ($zoneIdFromXml) {
+                    $zoneInfoElement.AppendChild($xmlDoc.CreateElement("ZoneIdFromXML")).InnerText = $zoneIdFromXml
                 }
                 
                 # Extract Content Editor Web Part content
@@ -270,14 +297,16 @@ try {
     Write-Host "Web Parts Found: $($webParts.Count)" -ForegroundColor White
     Write-Host "Output saved to: $outputPath" -ForegroundColor Yellow
     
-    # Show web part summary
+    # Show web part summary with zone information
     Write-Host "`n=== WEB PARTS SUMMARY ===" -ForegroundColor Cyan
     $counter = 0
     foreach ($wp in $webParts) {
         $counter++
         $title = if ($wp.WebPart.Title) { $wp.WebPart.Title } else { "No Title" }
         $zone = if ($wp.ZoneId) { $wp.ZoneId } else { "No Zone" }
-        Write-Host "$counter. $title (Zone: $zone, ID: $($wp.Id))" -ForegroundColor White
+        $zoneIndex = if ($wp.ZoneIndex -ne $null) { $wp.ZoneIndex } else { "N/A" }
+        Write-Host "$counter. $title" -ForegroundColor White
+        Write-Host "    Zone: $zone | Zone Index: $zoneIndex | ID: $($wp.Id)" -ForegroundColor Gray
     }
 }
 catch {
