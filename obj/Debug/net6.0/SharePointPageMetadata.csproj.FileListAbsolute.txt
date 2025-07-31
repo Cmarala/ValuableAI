@@ -1,0 +1,5 @@
+/workspace/obj/Debug/net6.0/SharePointPageMetadata.csproj.AssemblyReference.cache
+/workspace/obj/Debug/net6.0/SharePointPageMetadata.GeneratedMSBuildEditorConfig.editorconfig
+/workspace/obj/Debug/net6.0/SharePointPageMetadata.AssemblyInfoInputs.cache
+/workspace/obj/Debug/net6.0/SharePointPageMetadata.AssemblyInfo.cs
+/workspace/obj/Debug/net6.0/SharePointPageMetadata.csproj.CoreCompileInputs.cache
