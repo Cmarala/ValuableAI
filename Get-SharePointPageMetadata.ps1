@@ -36,18 +36,59 @@ try {
     Connect-PnPOnline -Url $SiteUrl -UseWebLogin
     Write-Host "Successfully connected to SharePoint" -ForegroundColor Green
     
+    # Get the web information first
+    Write-Host "Getting web information..." -ForegroundColor Yellow
+    $web = Get-PnPWeb
+    if ($null -eq $web) {
+        throw "Could not retrieve web information"
+    }
+    Write-Host "Web retrieved successfully: $($web.Title)" -ForegroundColor Green
+    
     # Get the page file
     Write-Host "Retrieving page: $PageUrl" -ForegroundColor Yellow
-    $page = Get-PnPFile -Url $PageUrl -AsListItem
-    
-    if ($null -eq $page) {
-        throw "Page not found: $PageUrl"
+    try {
+        $pageFile = Get-PnPFile -Url $PageUrl -ErrorAction Stop
+        if ($null -eq $pageFile) {
+            throw "Page file not found: $PageUrl"
+        }
+        Write-Host "Page file retrieved successfully: $($pageFile.Name)" -ForegroundColor Green
+    }
+    catch {
+        throw "Failed to retrieve page file '$PageUrl': $($_.Exception.Message)"
     }
     
-    # Get additional page properties
-    $pageFile = Get-PnPFile -Url $PageUrl
-    $web = Get-PnPWeb
-    $list = Get-PnPList -Identity "Site Pages"
+    # Get the page as list item
+    Write-Host "Getting page as list item..." -ForegroundColor Yellow
+    try {
+        $page = Get-PnPFile -Url $PageUrl -AsListItem -ErrorAction Stop
+        if ($null -eq $page) {
+            throw "Could not retrieve page as list item: $PageUrl"
+        }
+        Write-Host "Page list item retrieved successfully" -ForegroundColor Green
+    }
+    catch {
+        throw "Failed to retrieve page as list item '$PageUrl': $($_.Exception.Message)"
+    }
+    
+    # Get the list information
+    Write-Host "Getting Site Pages list..." -ForegroundColor Yellow
+    try {
+        $list = Get-PnPList -Identity "Site Pages" -ErrorAction Stop
+        if ($null -eq $list) {
+            # Try alternative names for the Site Pages list
+            $list = Get-PnPList -Identity "Pages" -ErrorAction SilentlyContinue
+            if ($null -eq $list) {
+                Write-Warning "Could not find Site Pages list, continuing without list information"
+            }
+        }
+        if ($list) {
+            Write-Host "Site Pages list retrieved successfully: $($list.Title)" -ForegroundColor Green
+        }
+    }
+    catch {
+        Write-Warning "Could not retrieve Site Pages list: $($_.Exception.Message)"
+        $list = $null
+    }
     
     # Create XML document
     $xmlDoc = New-Object System.Xml.XmlDocument
@@ -63,26 +104,56 @@ try {
     $rootElement.AppendChild($siteInfo) | Out-Null
     
     $siteInfo.AppendChild($xmlDoc.CreateElement("SiteUrl")).InnerText = $SiteUrl
-    $siteInfo.AppendChild($xmlDoc.CreateElement("WebTitle")).InnerText = $web.Title
-    $siteInfo.AppendChild($xmlDoc.CreateElement("WebDescription")).InnerText = $web.Description
-    $siteInfo.AppendChild($xmlDoc.CreateElement("WebId")).InnerText = $web.Id
-    $siteInfo.AppendChild($xmlDoc.CreateElement("WebServerRelativeUrl")).InnerText = $web.ServerRelativeUrl
-    $siteInfo.AppendChild($xmlDoc.CreateElement("WebCreated")).InnerText = $web.Created.ToString("yyyy-MM-ddTHH:mm:ssZ")
-    $siteInfo.AppendChild($xmlDoc.CreateElement("WebLastModified")).InnerText = $web.LastItemModifiedDate.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    
+    if ($web.Title) {
+        $siteInfo.AppendChild($xmlDoc.CreateElement("WebTitle")).InnerText = $web.Title
+    }
+    if ($web.Description) {
+        $siteInfo.AppendChild($xmlDoc.CreateElement("WebDescription")).InnerText = $web.Description
+    }
+    if ($web.Id) {
+        $siteInfo.AppendChild($xmlDoc.CreateElement("WebId")).InnerText = $web.Id.ToString()
+    }
+    if ($web.ServerRelativeUrl) {
+        $siteInfo.AppendChild($xmlDoc.CreateElement("WebServerRelativeUrl")).InnerText = $web.ServerRelativeUrl
+    }
+    if ($web.Created) {
+        $siteInfo.AppendChild($xmlDoc.CreateElement("WebCreated")).InnerText = $web.Created.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }
+    if ($web.LastItemModifiedDate) {
+        $siteInfo.AppendChild($xmlDoc.CreateElement("WebLastModified")).InnerText = $web.LastItemModifiedDate.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }
     
     # Page Information
     $pageInfo = $xmlDoc.CreateElement("PageInformation")
     $rootElement.AppendChild($pageInfo) | Out-Null
     
     $pageInfo.AppendChild($xmlDoc.CreateElement("PageUrl")).InnerText = $PageUrl
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageName")).InnerText = $pageFile.Name
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageTitle")).InnerText = $page["Title"]
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageId")).InnerText = $page["ID"]
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageUniqueId")).InnerText = $page["UniqueId"]
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageServerRelativeUrl")).InnerText = $pageFile.ServerRelativeUrl
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageFileSize")).InnerText = $pageFile.Length
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageCheckOutType")).InnerText = $pageFile.CheckOutType
-    $pageInfo.AppendChild($xmlDoc.CreateElement("PageLevel")).InnerText = $pageFile.Level
+    
+    if ($pageFile -and $pageFile.Name) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageName")).InnerText = $pageFile.Name
+    }
+    if ($page -and $page["Title"]) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageTitle")).InnerText = $page["Title"].ToString()
+    }
+    if ($page -and $page["ID"]) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageId")).InnerText = $page["ID"].ToString()
+    }
+    if ($page -and $page["UniqueId"]) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageUniqueId")).InnerText = $page["UniqueId"].ToString()
+    }
+    if ($pageFile -and $pageFile.ServerRelativeUrl) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageServerRelativeUrl")).InnerText = $pageFile.ServerRelativeUrl
+    }
+    if ($pageFile -and $pageFile.Length) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageFileSize")).InnerText = $pageFile.Length.ToString()
+    }
+    if ($pageFile -and $pageFile.CheckOutType) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageCheckOutType")).InnerText = $pageFile.CheckOutType.ToString()
+    }
+    if ($pageFile -and $pageFile.Level) {
+        $pageInfo.AppendChild($xmlDoc.CreateElement("PageLevel")).InnerText = $pageFile.Level.ToString()
+    }
     
     # Dates
     $datesInfo = $xmlDoc.CreateElement("Dates")
@@ -105,27 +176,37 @@ try {
     $authorsInfo = $xmlDoc.CreateElement("Authors")
     $pageInfo.AppendChild($authorsInfo) | Out-Null
     
-    if ($page["Author"]) {
+    if ($page -and $page["Author"] -and $page["Author"] -ne $null) {
         $author = $xmlDoc.CreateElement("CreatedBy")
         $authorsInfo.AppendChild($author) | Out-Null
-        $author.AppendChild($xmlDoc.CreateElement("LoginName")).InnerText = $page["Author"].LookupValue
-        $author.AppendChild($xmlDoc.CreateElement("Email")).InnerText = $page["Author"].Email
+        if ($page["Author"].LookupValue) {
+            $author.AppendChild($xmlDoc.CreateElement("LoginName")).InnerText = $page["Author"].LookupValue
+        }
+        if ($page["Author"].Email) {
+            $author.AppendChild($xmlDoc.CreateElement("Email")).InnerText = $page["Author"].Email
+        }
     }
     
-    if ($page["Editor"]) {
+    if ($page -and $page["Editor"] -and $page["Editor"] -ne $null) {
         $editor = $xmlDoc.CreateElement("ModifiedBy")
         $authorsInfo.AppendChild($editor) | Out-Null
-        $editor.AppendChild($xmlDoc.CreateElement("LoginName")).InnerText = $page["Editor"].LookupValue
-        $editor.AppendChild($xmlDoc.CreateElement("Email")).InnerText = $page["Editor"].Email
+        if ($page["Editor"].LookupValue) {
+            $editor.AppendChild($xmlDoc.CreateElement("LoginName")).InnerText = $page["Editor"].LookupValue
+        }
+        if ($page["Editor"].Email) {
+            $editor.AppendChild($xmlDoc.CreateElement("Email")).InnerText = $page["Editor"].Email
+        }
     }
     
     # Content Type Information
     $contentTypeInfo = $xmlDoc.CreateElement("ContentType")
     $pageInfo.AppendChild($contentTypeInfo) | Out-Null
     
-    if ($page["ContentType"]) {
-        $contentTypeInfo.AppendChild($xmlDoc.CreateElement("Name")).InnerText = $page["ContentType"]
-        $contentTypeInfo.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $page["ContentTypeId"]
+    if ($page -and $page["ContentType"]) {
+        $contentTypeInfo.AppendChild($xmlDoc.CreateElement("Name")).InnerText = $page["ContentType"].ToString()
+    }
+    if ($page -and $page["ContentTypeId"]) {
+        $contentTypeInfo.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $page["ContentTypeId"].ToString()
     }
     
     # Publishing Information (if available)
@@ -145,7 +226,7 @@ try {
     )
     
     foreach ($field in $publishingFields) {
-        if ($page.FieldValues.ContainsKey($field) -and $page[$field] -ne $null) {
+        if ($page -and $page.FieldValues -and $page.FieldValues.ContainsKey($field) -and $page[$field] -ne $null) {
             $publishingInfo.AppendChild($xmlDoc.CreateElement($field)).InnerText = $page[$field].ToString()
         }
     }
@@ -167,12 +248,19 @@ try {
                      "ScopeId", "VirusStatus", "_CheckinComment", "LinkCheckedOutTitle", "Modified_x0020_By",
                      "Created_x0020_By", "File_x0020_Size", "InstanceID", "Order", "WorkflowInstanceID")
     
-    foreach ($field in $page.FieldValues.Keys) {
-        if ($systemFields -notcontains $field -and $page[$field] -ne $null -and $page[$field] -ne "") {
-            $customField = $xmlDoc.CreateElement("Field")
-            $customFields.AppendChild($customField) | Out-Null
-            $customField.SetAttribute("Name", $field)
-            $customField.InnerText = $page[$field].ToString()
+    if ($page -and $page.FieldValues) {
+        foreach ($field in $page.FieldValues.Keys) {
+            if ($systemFields -notcontains $field -and $page[$field] -ne $null -and $page[$field] -ne "") {
+                try {
+                    $customField = $xmlDoc.CreateElement("Field")
+                    $customFields.AppendChild($customField) | Out-Null
+                    $customField.SetAttribute("Name", $field)
+                    $customField.InnerText = $page[$field].ToString()
+                }
+                catch {
+                    Write-Warning "Could not process custom field '$field': $($_.Exception.Message)"
+                }
+            }
         }
     }
     
@@ -180,11 +268,11 @@ try {
     $versionInfo = $xmlDoc.CreateElement("VersionInformation")
     $pageInfo.AppendChild($versionInfo) | Out-Null
     
-    if ($page["_UIVersionString"]) {
-        $versionInfo.AppendChild($xmlDoc.CreateElement("UIVersion")).InnerText = $page["_UIVersionString"]
+    if ($page -and $page["_UIVersionString"]) {
+        $versionInfo.AppendChild($xmlDoc.CreateElement("UIVersion")).InnerText = $page["_UIVersionString"].ToString()
     }
-    if ($page["_UIVersion"]) {
-        $versionInfo.AppendChild($xmlDoc.CreateElement("VersionNumber")).InnerText = $page["_UIVersion"]
+    if ($page -and $page["_UIVersion"]) {
+        $versionInfo.AppendChild($xmlDoc.CreateElement("VersionNumber")).InnerText = $page["_UIVersion"].ToString()
     }
     
     # Get version history
@@ -195,12 +283,26 @@ try {
             $versionInfo.AppendChild($versionHistory) | Out-Null
             
             foreach ($version in $versions) {
-                $versionElement = $xmlDoc.CreateElement("Version")
-                $versionHistory.AppendChild($versionElement) | Out-Null
-                $versionElement.SetAttribute("VersionLabel", $version.VersionLabel)
-                $versionElement.SetAttribute("Size", $version.Size)
-                $versionElement.SetAttribute("Created", $version.Created.ToString("yyyy-MM-ddTHH:mm:ssZ"))
-                $versionElement.SetAttribute("CreatedBy", $version.CreatedBy.LookupValue)
+                try {
+                    $versionElement = $xmlDoc.CreateElement("Version")
+                    $versionHistory.AppendChild($versionElement) | Out-Null
+                    
+                    if ($version.VersionLabel) {
+                        $versionElement.SetAttribute("VersionLabel", $version.VersionLabel)
+                    }
+                    if ($version.Size) {
+                        $versionElement.SetAttribute("Size", $version.Size.ToString())
+                    }
+                    if ($version.Created) {
+                        $versionElement.SetAttribute("Created", $version.Created.ToString("yyyy-MM-ddTHH:mm:ssZ"))
+                    }
+                    if ($version.CreatedBy -and $version.CreatedBy.LookupValue) {
+                        $versionElement.SetAttribute("CreatedBy", $version.CreatedBy.LookupValue)
+                    }
+                }
+                catch {
+                    Write-Warning "Could not process version: $($_.Exception.Message)"
+                }
             }
         }
     }
@@ -221,12 +323,25 @@ try {
     
     # Display summary
     Write-Host "`n=== METADATA SUMMARY ===" -ForegroundColor Cyan
-    Write-Host "Page Title: $($page['Title'])" -ForegroundColor White
-    Write-Host "Page ID: $($page['ID'])" -ForegroundColor White
-    Write-Host "Created: $($page['Created'])" -ForegroundColor White
-    Write-Host "Modified: $($page['Modified'])" -ForegroundColor White
-    Write-Host "File Size: $($pageFile.Length) bytes" -ForegroundColor White
-    Write-Host "Custom Fields Found: $($customFields.ChildNodes.Count)" -ForegroundColor White
+    
+    if ($page -and $page['Title']) {
+        Write-Host "Page Title: $($page['Title'])" -ForegroundColor White
+    }
+    if ($page -and $page['ID']) {
+        Write-Host "Page ID: $($page['ID'])" -ForegroundColor White
+    }
+    if ($page -and $page['Created']) {
+        Write-Host "Created: $($page['Created'])" -ForegroundColor White
+    }
+    if ($page -and $page['Modified']) {
+        Write-Host "Modified: $($page['Modified'])" -ForegroundColor White
+    }
+    if ($pageFile -and $pageFile.Length) {
+        Write-Host "File Size: $($pageFile.Length) bytes" -ForegroundColor White
+    }
+    if ($customFields) {
+        Write-Host "Custom Fields Found: $($customFields.ChildNodes.Count)" -ForegroundColor White
+    }
     
     if ($versions) {
         Write-Host "Version History: $($versions.Count) versions" -ForegroundColor White
