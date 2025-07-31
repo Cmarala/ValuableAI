@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://schemas.sharepoint.com/page-extraction/2016"
+           xmlns:tns="http://schemas.sharepoint.com/page-extraction/2016"
+           elementFormDefault="qualified">
+
+  <!-- Root element for SharePoint page extraction -->
+  <xs:element name="SharePointPageData" type="tns:SharePointPageDataType"/>
+
+  <!-- Complex type for the root element -->
+  <xs:complexType name="SharePointPageDataType">
+    <xs:sequence>
+      <xs:element name="ExtractionInfo" type="tns:ExtractionInfoType"/>
+      <xs:element name="SiteInformation" type="tns:SiteInformationType"/>
+      <xs:element name="PageMetadata" type="tns:PageMetadataType"/>
+      <xs:element name="PageContent" type="tns:PageContentType"/>
+      <xs:element name="WebPartZones" type="tns:WebPartZonesType"/>
+      <xs:element name="AllWebParts" type="tns:AllWebPartsType"/>
+      <xs:element name="PageStructure" type="tns:PageStructureType"/>
+    </xs:sequence>
+    <xs:attribute name="version" type="xs:string" use="required"/>
+    <xs:attribute name="extractionDate" type="xs:dateTime" use="required"/>
+  </xs:complexType>
+
+  <!-- Extraction information -->
+  <xs:complexType name="ExtractionInfoType">
+    <xs:sequence>
+      <xs:element name="ScriptVersion" type="xs:string"/>
+      <xs:element name="SharePointVersion" type="xs:string"/>
+      <xs:element name="ExtractionUser" type="xs:string"/>
+      <xs:element name="ExtractionMethod" type="xs:string"/>
+      <xs:element name="Timestamp" type="xs:dateTime"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Site information -->
+  <xs:complexType name="SiteInformationType">
+    <xs:sequence>
+      <xs:element name="SiteUrl" type="xs:anyURI"/>
+      <xs:element name="SiteTitle" type="xs:string"/>
+      <xs:element name="WebUrl" type="xs:anyURI"/>
+      <xs:element name="WebTitle" type="xs:string"/>
+      <xs:element name="WebTemplate" type="xs:string"/>
+      <xs:element name="Culture" type="xs:string"/>
+      <xs:element name="Language" type="xs:int"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Page metadata -->
+  <xs:complexType name="PageMetadataType">
+    <xs:sequence>
+      <xs:element name="PageId" type="tns:GuidType"/>
+      <xs:element name="PageName" type="xs:string"/>
+      <xs:element name="PageTitle" type="xs:string"/>
+      <xs:element name="PageUrl" type="xs:anyURI"/>
+      <xs:element name="ServerRelativeUrl" type="xs:string"/>
+      <xs:element name="PageType" type="tns:PageTypeEnum"/>
+      <xs:element name="ContentType" type="xs:string"/>
+      <xs:element name="ContentTypeId" type="xs:string"/>
+      <xs:element name="Created" type="xs:dateTime"/>
+      <xs:element name="Modified" type="xs:dateTime"/>
+      <xs:element name="CreatedBy" type="tns:UserType"/>
+      <xs:element name="ModifiedBy" type="tns:UserType"/>
+      <xs:element name="CheckOutType" type="xs:string"/>
+      <xs:element name="FileSize" type="xs:long"/>
+      <xs:element name="Version" type="xs:string"/>
+      <xs:element name="CustomProperties" type="tns:CustomPropertiesType" minOccurs="0"/>
+      <xs:element name="ListItemFields" type="tns:ListItemFieldsType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Page content (ASPX content, Wiki content, etc.) -->
+  <xs:complexType name="PageContentType">
+    <xs:sequence>
+      <xs:element name="AspxContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="WikiContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="PublishingContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="RawPageContent" type="xs:string"/>
+      <xs:element name="PlainTextContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="ContentFields" type="tns:ContentFieldsType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Web Part Zones -->
+  <xs:complexType name="WebPartZonesType">
+    <xs:sequence>
+      <xs:element name="Zone" type="tns:WebPartZoneType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:int" use="required"/>
+  </xs:complexType>
+
+  <!-- Individual Web Part Zone -->
+  <xs:complexType name="WebPartZoneType">
+    <xs:sequence>
+      <xs:element name="ZoneId" type="xs:string"/>
+      <xs:element name="ZoneIndex" type="xs:int"/>
+      <xs:element name="ZoneTitle" type="xs:string" minOccurs="0"/>
+      <xs:element name="Orientation" type="tns:OrientationEnum"/>
+      <xs:element name="ChromeType" type="xs:string"/>
+      <xs:element name="WebPartsInZone" type="tns:WebPartsInZoneType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Web Parts in a specific zone -->
+  <xs:complexType name="WebPartsInZoneType">
+    <xs:sequence>
+      <xs:element name="WebPartReference" type="tns:WebPartReferenceType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:int" use="required"/>
+  </xs:complexType>
+
+  <!-- Reference to a web part within a zone -->
+  <xs:complexType name="WebPartReferenceType">
+    <xs:sequence>
+      <xs:element name="WebPartId" type="tns:GuidType"/>
+      <xs:element name="ZoneIndex" type="xs:int"/>
+      <xs:element name="Order" type="xs:int"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- All Web Parts -->
+  <xs:complexType name="AllWebPartsType">
+    <xs:sequence>
+      <xs:element name="WebPart" type="tns:WebPartType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:int" use="required"/>
+  </xs:complexType>
+
+  <!-- Individual Web Part -->
+  <xs:complexType name="WebPartType">
+    <xs:sequence>
+      <xs:element name="WebPartId" type="tns:GuidType"/>
+      <xs:element name="Title" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="TypeName" type="xs:string"/>
+      <xs:element name="Assembly" type="xs:string" minOccurs="0"/>
+      <xs:element name="ZoneId" type="xs:string"/>
+      <xs:element name="ZoneIndex" type="xs:int"/>
+      <xs:element name="IsVisible" type="xs:boolean"/>
+      <xs:element name="IsIncluded" type="xs:boolean"/>
+      <xs:element name="IsClosed" type="xs:boolean"/>
+      <xs:element name="ChromeType" type="xs:string"/>
+      <xs:element name="ChromeState" type="xs:string"/>
+      <xs:element name="Width" type="xs:string" minOccurs="0"/>
+      <xs:element name="Height" type="xs:string" minOccurs="0"/>
+      <xs:element name="AllowClose" type="xs:boolean"/>
+      <xs:element name="AllowConnect" type="xs:boolean"/>
+      <xs:element name="AllowEdit" type="xs:boolean"/>
+      <xs:element name="AllowHide" type="xs:boolean"/>
+      <xs:element name="AllowMinimize" type="xs:boolean"/>
+      <xs:element name="AllowZoneChange" type="xs:boolean"/>
+      <xs:element name="ExportMode" type="xs:string"/>
+      <xs:element name="WebPartXml" type="xs:string"/>
+      <xs:element name="Properties" type="tns:WebPartPropertiesType"/>
+      <xs:element name="Content" type="tns:WebPartContentType" minOccurs="0"/>
+      <xs:element name="EmbeddedWebParts" type="tns:EmbeddedWebPartsType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Web Part Properties -->
+  <xs:complexType name="WebPartPropertiesType">
+    <xs:sequence>
+      <xs:element name="Property" type="tns:PropertyType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:int" use="required"/>
+  </xs:complexType>
+
+  <!-- Individual Property -->
+  <xs:complexType name="PropertyType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="type" type="xs:string" use="required"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- Web Part Content -->
+  <xs:complexType name="WebPartContentType">
+    <xs:sequence>
+      <xs:element name="HtmlContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="TextContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="XmlContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="JsonContent" type="xs:string" minOccurs="0"/>
+      <xs:element name="RawContent" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Embedded Web Parts -->
+  <xs:complexType name="EmbeddedWebPartsType">
+    <xs:sequence>
+      <xs:element name="EmbeddedWebPart" type="tns:WebPartType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:int" use="required"/>
+  </xs:complexType>
+
+  <!-- Page Structure (order of content elements) -->
+  <xs:complexType name="PageStructureType">
+    <xs:sequence>
+      <xs:element name="StructureElement" type="tns:StructureElementType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:int" use="required"/>
+  </xs:complexType>
+
+  <!-- Structure Element -->
+  <xs:complexType name="StructureElementType">
+    <xs:sequence>
+      <xs:element name="ElementId" type="xs:string"/>
+      <xs:element name="ElementType" type="tns:ElementTypeEnum"/>
+      <xs:element name="Order" type="xs:int"/>
+      <xs:element name="ZoneId" type="xs:string" minOccurs="0"/>
+      <xs:element name="Content" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Content Fields -->
+  <xs:complexType name="ContentFieldsType">
+    <xs:sequence>
+      <xs:element name="ContentField" type="tns:ContentFieldType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Content Field -->
+  <xs:complexType name="ContentFieldType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="name" type="xs:string" use="required"/>
+        <xs:attribute name="type" type="xs:string" use="required"/>
+        <xs:attribute name="displayName" type="xs:string"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- List Item Fields -->
+  <xs:complexType name="ListItemFieldsType">
+    <xs:sequence>
+      <xs:element name="Field" type="tns:ListItemFieldType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- List Item Field -->
+  <xs:complexType name="ListItemFieldType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="internalName" type="xs:string" use="required"/>
+        <xs:attribute name="displayName" type="xs:string"/>
+        <xs:attribute name="fieldType" type="xs:string"/>
+        <xs:attribute name="isReadOnly" type="xs:boolean"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <!-- Custom Properties -->
+  <xs:complexType name="CustomPropertiesType">
+    <xs:sequence>
+      <xs:element name="CustomProperty" type="tns:PropertyType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- User Type -->
+  <xs:complexType name="UserType">
+    <xs:sequence>
+      <xs:element name="Id" type="xs:int"/>
+      <xs:element name="LoginName" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Email" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- GUID Type -->
+  <xs:simpleType name="GuidType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Page Type Enumeration -->
+  <xs:simpleType name="PageTypeEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Wiki"/>
+      <xs:enumeration value="Publishing"/>
+      <xs:enumeration value="WebPart"/>
+      <xs:enumeration value="Application"/>
+      <xs:enumeration value="Master"/>
+      <xs:enumeration value="Layout"/>
+      <xs:enumeration value="Other"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Orientation Enumeration -->
+  <xs:simpleType name="OrientationEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Horizontal"/>
+      <xs:enumeration value="Vertical"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Element Type Enumeration -->
+  <xs:simpleType name="ElementTypeEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="WebPart"/>
+      <xs:enumeration value="Content"/>
+      <xs:enumeration value="Zone"/>
+      <xs:enumeration value="Text"/>
+      <xs:enumeration value="Html"/>
+      <xs:enumeration value="Field"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>
