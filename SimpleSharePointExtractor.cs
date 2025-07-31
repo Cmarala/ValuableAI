@@ -1,5 +1,5 @@
 using Microsoft.SharePoint.Client;
-using PnP.Framework;
+using System.Security;
 using System.Xml;
 
 class Program
@@ -9,7 +9,7 @@ class Program
     private static readonly string PageUrl = "SitePages/stars.aspx";
     private static readonly string OutputFolder = @"C:\Temp\SharePointOutput";
 
-    static async Task Main(string[] args)
+    static void Main(string[] args)
     {
         Console.WriteLine("SharePoint 2016 Page Metadata Extractor (POC)");
         Console.WriteLine("==============================================");
@@ -22,8 +22,21 @@ class Program
             // Create output directory
             Directory.CreateDirectory(OutputFolder);
 
-            // Authenticate and extract metadata
-            var metadata = await ExtractPageMetadata();
+            // Get credentials
+            Console.WriteLine("Please provide your SharePoint credentials:");
+            Console.Write("Username: ");
+            var username = Console.ReadLine();
+            Console.Write("Password: ");
+            var password = ReadPassword();
+
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                Console.WriteLine("Username and password are required!");
+                return;
+            }
+
+            // Extract metadata
+            var metadata = ExtractPageMetadata(username, password);
 
             // Generate XML output
             var outputPath = GenerateXmlOutput(metadata);
@@ -37,50 +50,53 @@ class Program
         catch (Exception ex)
         {
             Console.WriteLine($"ERROR: {ex.Message}");
+            if (ex.InnerException != null)
+                Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
         }
 
         Console.WriteLine("\nPress any key to exit...");
         Console.ReadKey();
     }
 
-    static async Task<SharePointPageMetadata> ExtractPageMetadata()
+    static SharePointPageMetadata ExtractPageMetadata(string username, string password)
     {
         Console.WriteLine("Connecting to SharePoint...");
-        Console.WriteLine("A browser window will open for authentication.");
-        Console.WriteLine("Please complete the login process...");
 
-        var authManager = new AuthenticationManager();
-        
-        // Use interactive authentication - this will open browser for login
-        using var context = authManager.GetACSAppOnlyContext(SiteUrl, "", ""); // This won't work, need proper method
-        
-        // Actually, let's use a simpler approach for POC
-        using var ctx = new ClientContext(SiteUrl);
-        
-        // For SharePoint 2016 with browser auth, we'll need to prompt user
-        Console.WriteLine("For this POC, please provide your credentials:");
-        Console.Write("Username: ");
-        var username = Console.ReadLine();
-        Console.Write("Password: ");
-        var password = ReadPassword();
-        
-        if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(password))
+        using var context = new ClientContext(SiteUrl);
+
+        // Set up credentials
+        var securePassword = new SecureString();
+        foreach (char c in password)
+            securePassword.AppendChar(c);
+        securePassword.MakeReadOnly();
+
+        // For SharePoint 2016, try different credential approaches
+        try
         {
-            var securePassword = new System.Security.SecureString();
-            foreach (char c in password)
-                securePassword.AppendChar(c);
-            securePassword.MakeReadOnly();
-            
-            ctx.Credentials = new SharePointOnlineCredentials(username, securePassword);
+            // Try SharePoint Online credentials first
+            context.Credentials = new SharePointOnlineCredentials(username, securePassword);
+        }
+        catch
+        {
+            try
+            {
+                // Try Network credentials for on-premises
+                context.Credentials = new System.Net.NetworkCredential(username, securePassword);
+            }
+            catch
+            {
+                // Try default credentials
+                context.Credentials = System.Net.CredentialCache.DefaultCredentials;
+            }
         }
 
         var metadata = new SharePointPageMetadata();
 
         // Get site information
         Console.WriteLine("Getting site information...");
-        var web = ctx.Web;
-        ctx.Load(web, w => w.Title, w => w.Description, w => w.Id, w => w.ServerRelativeUrl, w => w.Created);
-        ctx.ExecuteQuery();
+        var web = context.Web;
+        context.Load(web, w => w.Title, w => w.Description, w => w.Id, w => w.ServerRelativeUrl, w => w.Created);
+        context.ExecuteQuery();
 
         metadata.SiteTitle = web.Title;
         metadata.SiteDescription = web.Description;
@@ -92,12 +108,13 @@ class Program
         // Get page information
         Console.WriteLine("Getting page information...");
         var pageServerRelativeUrl = web.ServerRelativeUrl.TrimEnd('/') + "/" + PageUrl.TrimStart('/');
+        
         var pageFile = web.GetFileByServerRelativeUrl(pageServerRelativeUrl);
-        ctx.Load(pageFile, f => f.Name, f => f.ServerRelativeUrl, f => f.Length, f => f.TimeCreated, f => f.TimeLastModified);
+        context.Load(pageFile, f => f.Name, f => f.ServerRelativeUrl, f => f.Length, f => f.TimeCreated, f => f.TimeLastModified);
 
         var pageListItem = pageFile.ListItemAllFields;
-        ctx.Load(pageListItem);
-        ctx.ExecuteQuery();
+        context.Load(pageListItem);
+        context.ExecuteQuery();
 
         metadata.PageName = pageFile.Name;
         metadata.PageServerRelativeUrl = pageFile.ServerRelativeUrl;
@@ -106,44 +123,62 @@ class Program
         metadata.PageModified = pageFile.TimeLastModified;
 
         // Get page metadata from list item
-        if (pageListItem.FieldValues.ContainsKey("Title"))
-            metadata.PageTitle = pageListItem.FieldValues["Title"]?.ToString();
+        var fieldValues = pageListItem.FieldValues;
 
-        if (pageListItem.FieldValues.ContainsKey("ID"))
-            metadata.PageId = Convert.ToInt32(pageListItem.FieldValues["ID"]);
+        if (fieldValues.ContainsKey("Title"))
+            metadata.PageTitle = fieldValues["Title"]?.ToString();
 
-        if (pageListItem.FieldValues.ContainsKey("Created"))
-            metadata.ListItemCreated = Convert.ToDateTime(pageListItem.FieldValues["Created"]);
+        if (fieldValues.ContainsKey("ID"))
+            metadata.PageId = Convert.ToInt32(fieldValues["ID"]);
 
-        if (pageListItem.FieldValues.ContainsKey("Modified"))
-            metadata.ListItemModified = Convert.ToDateTime(pageListItem.FieldValues["Modified"]);
+        if (fieldValues.ContainsKey("Created"))
+            metadata.ListItemCreated = Convert.ToDateTime(fieldValues["Created"]);
+
+        if (fieldValues.ContainsKey("Modified"))
+            metadata.ListItemModified = Convert.ToDateTime(fieldValues["Modified"]);
 
         // Get author information
-        if (pageListItem.FieldValues.ContainsKey("Author"))
+        if (fieldValues.ContainsKey("Author"))
         {
-            var author = pageListItem.FieldValues["Author"] as FieldUserValue;
+            var author = fieldValues["Author"] as FieldUserValue;
             metadata.CreatedBy = author?.LookupValue;
         }
 
-        if (pageListItem.FieldValues.ContainsKey("Editor"))
+        if (fieldValues.ContainsKey("Editor"))
         {
-            var editor = pageListItem.FieldValues["Editor"] as FieldUserValue;
+            var editor = fieldValues["Editor"] as FieldUserValue;
             metadata.ModifiedBy = editor?.LookupValue;
         }
 
         // Get content type
-        if (pageListItem.FieldValues.ContainsKey("ContentType"))
-            metadata.ContentType = pageListItem.FieldValues["ContentType"]?.ToString();
+        if (fieldValues.ContainsKey("ContentType"))
+            metadata.ContentType = fieldValues["ContentType"]?.ToString();
 
-        // Get custom fields (non-system fields)
-        var systemFields = new HashSet<string> { "ID", "Title", "Created", "Modified", "Author", "Editor", "ContentType", "UniqueId", "GUID", "_UIVersionString", "FileRef", "FileDirRef", "FileLeafRef" };
+        // Get custom fields (exclude system fields)
+        var systemFields = new HashSet<string> 
+        { 
+            "ID", "Title", "Created", "Modified", "Author", "Editor", "ContentType", 
+            "UniqueId", "GUID", "_UIVersionString", "FileRef", "FileDirRef", "FileLeafRef",
+            "_Level", "_IsCurrentVersion", "ItemChildCount", "FolderChildCount",
+            "Attachments", "_ModerationStatus", "File_x0020_Type", "HTML_x0020_File_x0020_Type",
+            "Edit", "LinkTitleNoMenu", "LinkTitle", "DocIcon", "FileSizeDisplay", 
+            "ServerUrl", "EncodedAbsUrl", "BaseName", "MetaInfo", "SelectTitle"
+        };
+
         metadata.CustomFields = new Dictionary<string, string>();
 
-        foreach (var field in pageListItem.FieldValues)
+        foreach (var field in fieldValues)
         {
             if (!systemFields.Contains(field.Key) && field.Value != null && !string.IsNullOrEmpty(field.Value.ToString()))
             {
-                metadata.CustomFields[field.Key] = field.Value.ToString()!;
+                try
+                {
+                    metadata.CustomFields[field.Key] = field.Value.ToString()!;
+                }
+                catch
+                {
+                    // Skip fields that can't be converted to string
+                }
             }
         }
 
@@ -164,12 +199,12 @@ class Program
         var siteInfo = xmlDoc.CreateElement("SiteInformation");
         rootElement.AppendChild(siteInfo);
         AddElement(xmlDoc, siteInfo, "SiteUrl", metadata.SiteUrl);
-        AddElement(xmlDoc, siteInfo, "SiteTitle", metadata.SiteTitle);
-        AddElement(xmlDoc, siteInfo, "SiteDescription", metadata.SiteDescription);
-        AddElement(xmlDoc, siteInfo, "SiteId", metadata.SiteId);
-        AddElement(xmlDoc, siteInfo, "SiteServerRelativeUrl", metadata.SiteServerRelativeUrl);
+        AddElement(xmlDoc, siteInfo, "WebTitle", metadata.SiteTitle);
+        AddElement(xmlDoc, siteInfo, "WebDescription", metadata.SiteDescription);
+        AddElement(xmlDoc, siteInfo, "WebId", metadata.SiteId);
+        AddElement(xmlDoc, siteInfo, "WebServerRelativeUrl", metadata.SiteServerRelativeUrl);
         if (metadata.SiteCreated.HasValue)
-            AddElement(xmlDoc, siteInfo, "SiteCreated", metadata.SiteCreated.Value.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+            AddElement(xmlDoc, siteInfo, "WebCreated", metadata.SiteCreated.Value.ToString("yyyy-MM-ddTHH:mm:ssZ"));
 
         // Page Information
         var pageInfo = xmlDoc.CreateElement("PageInformation");
