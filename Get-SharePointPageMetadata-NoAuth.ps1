@@ -273,6 +273,14 @@ try {
     $pageInfo.AppendChild($webPartsInfo) | Out-Null
     
     Write-Host "Retrieving web parts information..." -ForegroundColor Yellow
+    Write-Host "Page URL parameter: $PageUrl" -ForegroundColor Cyan
+    Write-Host "Page file exists: $($pageFile -ne $null)" -ForegroundColor Cyan
+    if ($pageFile) {
+        Write-Host "Page file ServerRelativeUrl: $($pageFile.ServerRelativeUrl)" -ForegroundColor Cyan
+        Write-Host "Page file Name: $($pageFile.Name)" -ForegroundColor Cyan
+        Write-Host "Page file Exists: $($pageFile.Exists)" -ForegroundColor Cyan
+    }
+    
     try {
         # Construct the server relative URL for the page
         $serverRelativePageUrl = $null
@@ -303,9 +311,29 @@ try {
             throw "Could not determine server relative URL for the page"
         }
         
+        Write-Host "Final ServerRelativePageUrl for web part retrieval: $serverRelativePageUrl" -ForegroundColor Magenta
+        
         # For SharePoint 2016 classic pages, get web parts using Get-PnPWebPart
         Write-Host "Getting web parts from: $serverRelativePageUrl" -ForegroundColor Yellow
-        $classicWebParts = Get-PnPWebPart -ServerRelativePageUrl $serverRelativePageUrl -ErrorAction Stop
+        try {
+            $classicWebParts = Get-PnPWebPart -ServerRelativePageUrl $serverRelativePageUrl -ErrorAction Stop
+            Write-Host "Get-PnPWebPart command executed successfully" -ForegroundColor Green
+            
+            if ($classicWebParts) {
+                Write-Host "Raw web parts object type: $($classicWebParts.GetType().Name)" -ForegroundColor Cyan
+                if ($classicWebParts -is [System.Array]) {
+                    Write-Host "Web parts array length: $($classicWebParts.Length)" -ForegroundColor Cyan
+                } else {
+                    Write-Host "Single web part object returned" -ForegroundColor Cyan
+                }
+            } else {
+                Write-Host "Get-PnPWebPart returned null" -ForegroundColor Red
+            }
+        }
+        catch {
+            Write-Error "Get-PnPWebPart failed: $($_.Exception.Message)"
+            throw
+        }
         
         if ($classicWebParts -and $classicWebParts.Count -gt 0) {
             Write-Host "Found $($classicWebParts.Count) web parts" -ForegroundColor Green
@@ -699,13 +727,38 @@ try {
     
     if ($webPartsInfo -and $webPartsInfo.ChildNodes.Count -gt 0) {
         $webPartCount = 0
+        $zoneCount = 0
+        
         foreach ($zone in $webPartsInfo.ChildNodes) {
             if ($zone.Name -eq "WebPartZone") {
-                $webPartCount += $zone.ChildNodes.Count
+                $zoneCount++
+                # Count actual WebPart elements within each zone
+                foreach ($child in $zone.ChildNodes) {
+                    if ($child.Name -eq "WebPart") {
+                        $webPartCount++
+                    }
+                }
+            }
+            elseif ($zone.Name -eq "Message" -or $zone.Name -eq "Error") {
+                # Handle cases where there are messages or errors instead of zones
+                Write-Host "Web Parts Status: $($zone.InnerText)" -ForegroundColor Yellow
             }
         }
-        Write-Host "Web Parts Found: $webPartCount" -ForegroundColor White
-        Write-Host "Web Part Zones: $($webPartsInfo.SelectNodes('WebPartZone').Count)" -ForegroundColor White
+        
+        if ($webPartCount -gt 0) {
+            Write-Host "Web Parts Found: $webPartCount" -ForegroundColor White
+            Write-Host "Web Part Zones: $zoneCount" -ForegroundColor White
+        } else {
+            Write-Host "Web Parts Found: 0" -ForegroundColor Yellow
+            if ($zoneCount -gt 0) {
+                Write-Host "Web Part Zones: $zoneCount (but no web parts in zones)" -ForegroundColor Yellow
+            } else {
+                Write-Host "Web Part Zones: 0" -ForegroundColor Yellow
+            }
+        }
+    } else {
+        Write-Host "Web Parts Found: 0" -ForegroundColor Yellow
+        Write-Host "No web part information available" -ForegroundColor Yellow
     }
     
     Write-Host "`nXML file saved to: $outputPath" -ForegroundColor Yellow
