@@ -1,0 +1,402 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SharePointPageData xmlns="http://schemas.sharepoint.com/page-extraction/2016" version="1.0" extractionDate="2024-01-15T14:30:22">
+  <ExtractionInfo>
+    <ScriptVersion>1.0.0</ScriptVersion>
+    <SharePointVersion>SharePoint 2016</SharePointVersion>
+    <ExtractionUser>CONTOSO\admin</ExtractionUser>
+    <ExtractionMethod>PowerShell CSOM</ExtractionMethod>
+    <Timestamp>2024-01-15T14:30:22</Timestamp>
+  </ExtractionInfo>
+  
+  <SiteInformation>
+    <SiteUrl>http://sharepoint.contoso.com</SiteUrl>
+    <SiteTitle>Contoso Intranet</SiteTitle>
+    <WebUrl>http://sharepoint.contoso.com</WebUrl>
+    <WebTitle>Home</WebTitle>
+    <WebTemplate>STS</WebTemplate>
+    <Culture>en-US</Culture>
+    <Language>1033</Language>
+  </SiteInformation>
+  
+  <PageMetadata>
+    <PageId>12345678-1234-1234-1234-123456789abc</PageId>
+    <PageName>Home.aspx</PageName>
+    <PageTitle>Welcome to Contoso</PageTitle>
+    <PageUrl>http://sharepoint.contoso.com/Pages/Home.aspx</PageUrl>
+    <ServerRelativeUrl>/Pages/Home.aspx</ServerRelativeUrl>
+    <PageType>Wiki</PageType>
+    <ContentType>Wiki Page</ContentType>
+    <ContentTypeId>0x010108</ContentTypeId>
+    <Created>2023-12-01T10:00:00</Created>
+    <Modified>2024-01-15T14:00:00</Modified>
+    <CreatedBy>
+      <Id>1</Id>
+      <LoginName>CONTOSO\spadmin</LoginName>
+      <Name>SharePoint Administrator</Name>
+      <Email>spadmin@contoso.com</Email>
+    </CreatedBy>
+    <ModifiedBy>
+      <Id>5</Id>
+      <LoginName>CONTOSO\jdoe</LoginName>
+      <Name>John Doe</Name>
+      <Email>jdoe@contoso.com</Email>
+    </ModifiedBy>
+    <CheckOutType>None</CheckOutType>
+    <FileSize>15432</FileSize>
+    <Version>2.0</Version>
+    <ListItemFields>
+      <Field internalName="Title" displayName="Title" fieldType="Text" isReadOnly="false">Welcome to Contoso</Field>
+      <Field internalName="WikiField" displayName="Wiki Content" fieldType="Note" isReadOnly="false">This is the main content of our wiki page...</Field>
+      <Field internalName="Modified" displayName="Modified" fieldType="DateTime" isReadOnly="true">2024-01-15T14:00:00Z</Field>
+      <Field internalName="Created" displayName="Created" fieldType="DateTime" isReadOnly="true">2023-12-01T10:00:00Z</Field>
+    </ListItemFields>
+  </PageMetadata>
+  
+  <PageContent>
+    <AspxContent><![CDATA[<%@ Page language="C#" MasterPageFile="~masterurl/default.master" Inherits="Microsoft.SharePoint.WebPartPages.WikiEditPage" %>]]></AspxContent>
+    <WikiContent><![CDATA[<div class="ExternalClass12345">
+<h1>Welcome to Contoso Intranet</h1>
+<p>This is our company's main portal for information sharing and collaboration.</p>
+<h2>Quick Links</h2>
+<ul>
+<li><a href="/Pages/HR.aspx">Human Resources</a></li>
+<li><a href="/Pages/IT.aspx">Information Technology</a></li>
+<li><a href="/Pages/News.aspx">Company News</a></li>
+</ul>
+</div>]]></WikiContent>
+    <PublishingContent><![CDATA[]]></PublishingContent>
+    <RawPageContent><![CDATA[<%@ Page language="C#" MasterPageFile="~masterurl/default.master" Inherits="Microsoft.SharePoint.WebPartPages.WikiEditPage" %>
+<%@ Register Tagprefix="SharePoint" Namespace="Microsoft.SharePoint.WebControls" Assembly="Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c" %>
+<asp:Content ContentPlaceHolderId="PlaceHolderPageTitle" runat="server">
+	<SharePoint:ListItemProperty Property="BaseName" maxlength="40" runat="server"/>
+</asp:Content>
+<asp:Content ContentPlaceHolderId="PlaceHolderMain" runat="server">
+    <SharePoint:WikiField FieldName="WikiField" runat="server" />
+</asp:Content>]]></RawPageContent>
+    <PlainTextContent><![CDATA[Welcome to Contoso Intranet
+This is our company's main portal for information sharing and collaboration.
+Quick Links
+Human Resources
+Information Technology
+Company News]]></PlainTextContent>
+    <ContentFields>
+      <ContentField name="WikiField" type="Wiki" displayName="Wiki Content"><![CDATA[<div class="ExternalClass12345">
+<h1>Welcome to Contoso Intranet</h1>
+<p>This is our company's main portal for information sharing and collaboration.</p>
+<h2>Quick Links</h2>
+<ul>
+<li><a href="/Pages/HR.aspx">Human Resources</a></li>
+<li><a href="/Pages/IT.aspx">Information Technology</a></li>
+<li><a href="/Pages/News.aspx">Company News</a></li>
+</ul>
+</div>]]></ContentField>
+    </ContentFields>
+  </PageContent>
+  
+  <WebPartZones count="2">
+    <Zone>
+      <ZoneId>wpz</ZoneId>
+      <ZoneIndex>0</ZoneIndex>
+      <ZoneTitle>Main Zone</ZoneTitle>
+      <Orientation>Vertical</Orientation>
+      <ChromeType>Default</ChromeType>
+      <WebPartsInZone count="2">
+        <WebPartReference>
+          <WebPartId>11111111-1111-1111-1111-111111111111</WebPartId>
+          <ZoneIndex>0</ZoneIndex>
+          <Order>0</Order>
+        </WebPartReference>
+        <WebPartReference>
+          <WebPartId>22222222-2222-2222-2222-222222222222</WebPartId>
+          <ZoneIndex>1</ZoneIndex>
+          <Order>1</Order>
+        </WebPartReference>
+      </WebPartsInZone>
+    </Zone>
+    <Zone>
+      <ZoneId>RightZone</ZoneId>
+      <ZoneIndex>1</ZoneIndex>
+      <ZoneTitle>Right Zone</ZoneTitle>
+      <Orientation>Vertical</Orientation>
+      <ChromeType>TitleOnly</ChromeType>
+      <WebPartsInZone count="1">
+        <WebPartReference>
+          <WebPartId>33333333-3333-3333-3333-333333333333</WebPartId>
+          <ZoneIndex>0</ZoneIndex>
+          <Order>0</Order>
+        </WebPartReference>
+      </WebPartsInZone>
+    </Zone>
+  </WebPartZones>
+  
+  <AllWebParts count="3">
+    <WebPart>
+      <WebPartId>11111111-1111-1111-1111-111111111111</WebPartId>
+      <Title>Company Announcements</Title>
+      <Description>Displays recent company announcements and news</Description>
+      <TypeName>Microsoft.SharePoint.WebPartPages.ContentEditorWebPart</TypeName>
+      <Assembly>Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c</Assembly>
+      <ZoneId>wpz</ZoneId>
+      <ZoneIndex>0</ZoneIndex>
+      <IsVisible>true</IsVisible>
+      <IsIncluded>true</IsIncluded>
+      <IsClosed>false</IsClosed>
+      <ChromeType>Default</ChromeType>
+      <ChromeState>Normal</ChromeState>
+      <Width></Width>
+      <Height></Height>
+      <AllowClose>true</AllowClose>
+      <AllowConnect>true</AllowConnect>
+      <AllowEdit>true</AllowEdit>
+      <AllowHide>true</AllowHide>
+      <AllowMinimize>true</AllowMinimize>
+      <AllowZoneChange>true</AllowZoneChange>
+      <ExportMode>All</ExportMode>
+      <WebPartXml><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<webParts>
+  <webPart xmlns="http://schemas.microsoft.com/WebPart/v3">
+    <metaData>
+      <type name="Microsoft.SharePoint.WebPartPages.ContentEditorWebPart, Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c" />
+      <importErrorMessage>Cannot import this Web Part.</importErrorMessage>
+    </metaData>
+    <data>
+      <properties>
+        <property name="Title" type="string">Company Announcements</property>
+        <property name="Content" type="string">&lt;div class="announcement-content"&gt;
+&lt;h3&gt;Latest News&lt;/h3&gt;
+&lt;p&gt;Welcome to our new intranet portal! We're excited to share...&lt;/p&gt;
+&lt;/div&gt;</property>
+        <property name="ChromeType" type="chrometype">Default</property>
+      </properties>
+    </data>
+  </webPart>
+</webParts>]]></WebPartXml>
+      <Properties count="8">
+        <Property name="Title" type="String"><![CDATA[Company Announcements]]></Property>
+        <Property name="Description" type="String"><![CDATA[Displays recent company announcements and news]]></Property>
+        <Property name="Content" type="String"><![CDATA[<div class="announcement-content">
+<h3>Latest News</h3>
+<p>Welcome to our new intranet portal! We're excited to share...</p>
+</div>]]></Property>
+        <Property name="ChromeType" type="String"><![CDATA[Default]]></Property>
+        <Property name="Width" type="String"><![CDATA[]]></Property>
+        <Property name="Height" type="String"><![CDATA[]]></Property>
+        <Property name="AllowClose" type="Boolean"><![CDATA[True]]></Property>
+        <Property name="AllowMinimize" type="Boolean"><![CDATA[True]]></Property>
+      </Properties>
+      <Content>
+        <HtmlContent><![CDATA[<div class="announcement-content">
+<h3>Latest News</h3>
+<p>Welcome to our new intranet portal! We're excited to share...</p>
+</div>]]></HtmlContent>
+        <TextContent><![CDATA[Latest News
+Welcome to our new intranet portal! We're excited to share...]]></TextContent>
+        <XmlContent><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<webParts>
+  <webPart xmlns="http://schemas.microsoft.com/WebPart/v3">
+    <metaData>
+      <type name="Microsoft.SharePoint.WebPartPages.ContentEditorWebPart, Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c" />
+    </metaData>
+    <data>
+      <properties>
+        <property name="Title" type="string">Company Announcements</property>
+        <property name="Content" type="string">&lt;div class="announcement-content"&gt;...</property>
+      </properties>
+    </data>
+  </webPart>
+</webParts>]]></XmlContent>
+        <JsonContent><![CDATA[]]></JsonContent>
+        <RawContent><![CDATA[Content: <div class="announcement-content">
+<h3>Latest News</h3>
+<p>Welcome to our new intranet portal! We're excited to share...</p>
+</div>]]></RawContent>
+      </Content>
+      <EmbeddedWebParts count="0">
+      </EmbeddedWebParts>
+    </WebPart>
+    
+    <WebPart>
+      <WebPartId>22222222-2222-2222-2222-222222222222</WebPartId>
+      <Title>Quick Tasks</Title>
+      <Description>Task list for common user actions</Description>
+      <TypeName>Microsoft.SharePoint.WebPartPages.ListViewWebPart</TypeName>
+      <Assembly>Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c</Assembly>
+      <ZoneId>wpz</ZoneId>
+      <ZoneIndex>1</ZoneIndex>
+      <IsVisible>true</IsVisible>
+      <IsIncluded>true</IsIncluded>
+      <IsClosed>false</IsClosed>
+      <ChromeType>TitleOnly</ChromeType>
+      <ChromeState>Normal</ChromeState>
+      <Width></Width>
+      <Height>200px</Height>
+      <AllowClose>true</AllowClose>
+      <AllowConnect>false</AllowConnect>
+      <AllowEdit>true</AllowEdit>
+      <AllowHide>true</AllowHide>
+      <AllowMinimize>true</AllowMinimize>
+      <AllowZoneChange>true</AllowZoneChange>
+      <ExportMode>NonSensitiveData</ExportMode>
+      <WebPartXml><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<webParts>
+  <webPart xmlns="http://schemas.microsoft.com/WebPart/v3">
+    <metaData>
+      <type name="Microsoft.SharePoint.WebPartPages.ListViewWebPart, Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c" />
+    </metaData>
+    <data>
+      <properties>
+        <property name="Title" type="string">Quick Tasks</property>
+        <property name="ListName" type="string">{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}</property>
+        <property name="ViewGuid" type="string">{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}</property>
+      </properties>
+    </data>
+  </webPart>
+</webParts>]]></WebPartXml>
+      <Properties count="10">
+        <Property name="Title" type="String"><![CDATA[Quick Tasks]]></Property>
+        <Property name="Description" type="String"><![CDATA[Task list for common user actions]]></Property>
+        <Property name="ListName" type="String"><![CDATA[{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}]]></Property>
+        <Property name="ViewGuid" type="String"><![CDATA[{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}]]></Property>
+        <Property name="ChromeType" type="String"><![CDATA[TitleOnly]]></Property>
+        <Property name="Height" type="String"><![CDATA[200px]]></Property>
+        <Property name="Toolbar" type="String"><![CDATA[Standard]]></Property>
+        <Property name="ViewFlag" type="String"><![CDATA[0]]></Property>
+        <Property name="XslLink" type="String"><![CDATA[]]></Property>
+        <Property name="BaseXsltHashKey" type="String"><![CDATA[12345]]></Property>
+      </Properties>
+      <Content>
+        <HtmlContent><![CDATA[<table class="ms-listviewtable">
+<tr><th>Task</th><th>Status</th></tr>
+<tr><td>Submit timesheet</td><td>Pending</td></tr>
+<tr><td>Review policies</td><td>Complete</td></tr>
+</table>]]></HtmlContent>
+        <TextContent><![CDATA[Task Status
+Submit timesheet Pending
+Review policies Complete]]></TextContent>
+        <XmlContent><![CDATA[]]></XmlContent>
+        <JsonContent><![CDATA[]]></JsonContent>
+        <RawContent><![CDATA[ListName: {AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}
+ViewGuid: {BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}]]></RawContent>
+      </Content>
+      <EmbeddedWebParts count="0">
+      </EmbeddedWebParts>
+    </WebPart>
+    
+    <WebPart>
+      <WebPartId>33333333-3333-3333-3333-333333333333</WebPartId>
+      <Title>Contact Information</Title>
+      <Description>Emergency contacts and help desk information</Description>
+      <TypeName>Microsoft.SharePoint.WebPartPages.ContentEditorWebPart</TypeName>
+      <Assembly>Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c</Assembly>
+      <ZoneId>RightZone</ZoneId>
+      <ZoneIndex>0</ZoneIndex>
+      <IsVisible>true</IsVisible>
+      <IsIncluded>true</IsIncluded>
+      <IsClosed>false</IsClosed>
+      <ChromeType>TitleOnly</ChromeType>
+      <ChromeState>Normal</ChromeState>
+      <Width>250px</Width>
+      <Height></Height>
+      <AllowClose>true</AllowClose>
+      <AllowConnect>true</AllowConnect>
+      <AllowEdit>true</AllowEdit>
+      <AllowHide>true</AllowHide>
+      <AllowMinimize>true</AllowMinimize>
+      <AllowZoneChange>true</AllowZoneChange>
+      <ExportMode>All</ExportMode>
+      <WebPartXml><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<webParts>
+  <webPart xmlns="http://schemas.microsoft.com/WebPart/v3">
+    <metaData>
+      <type name="Microsoft.SharePoint.WebPartPages.ContentEditorWebPart, Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c" />
+    </metaData>
+    <data>
+      <properties>
+        <property name="Title" type="string">Contact Information</property>
+        <property name="Content" type="string">&lt;div class="contact-info"&gt;
+&lt;h4&gt;Help Desk&lt;/h4&gt;
+&lt;p&gt;Phone: 555-0123&lt;/p&gt;
+&lt;p&gt;Email: help@contoso.com&lt;/p&gt;
+&lt;/div&gt;</property>
+      </properties>
+    </data>
+  </webPart>
+</webParts>]]></WebPartXml>
+      <Properties count="6">
+        <Property name="Title" type="String"><![CDATA[Contact Information]]></Property>
+        <Property name="Description" type="String"><![CDATA[Emergency contacts and help desk information]]></Property>
+        <Property name="Content" type="String"><![CDATA[<div class="contact-info">
+<h4>Help Desk</h4>
+<p>Phone: 555-0123</p>
+<p>Email: help@contoso.com</p>
+</div>]]></Property>
+        <Property name="ChromeType" type="String"><![CDATA[TitleOnly]]></Property>
+        <Property name="Width" type="String"><![CDATA[250px]]></Property>
+        <Property name="AllowClose" type="Boolean"><![CDATA[True]]></Property>
+      </Properties>
+      <Content>
+        <HtmlContent><![CDATA[<div class="contact-info">
+<h4>Help Desk</h4>
+<p>Phone: 555-0123</p>
+<p>Email: help@contoso.com</p>
+</div>]]></HtmlContent>
+        <TextContent><![CDATA[Help Desk
+Phone: 555-0123
+Email: help@contoso.com]]></TextContent>
+        <XmlContent><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<webParts>
+  <webPart xmlns="http://schemas.microsoft.com/WebPart/v3">
+    <metaData>
+      <type name="Microsoft.SharePoint.WebPartPages.ContentEditorWebPart, Microsoft.SharePoint, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c" />
+    </metaData>
+    <data>
+      <properties>
+        <property name="Title" type="string">Contact Information</property>
+        <property name="Content" type="string">&lt;div class="contact-info"&gt;...</property>
+      </properties>
+    </data>
+  </webPart>
+</webParts>]]></XmlContent>
+        <JsonContent><![CDATA[]]></JsonContent>
+        <RawContent><![CDATA[Content: <div class="contact-info">
+<h4>Help Desk</h4>
+<p>Phone: 555-0123</p>
+<p>Email: help@contoso.com</p>
+</div>]]></RawContent>
+      </Content>
+      <EmbeddedWebParts count="0">
+      </EmbeddedWebParts>
+    </WebPart>
+  </AllWebParts>
+  
+  <PageStructure count="4">
+    <StructureElement>
+      <ElementId>WikiContent</ElementId>
+      <ElementType>Content</ElementType>
+      <Order>0</Order>
+      <ZoneId></ZoneId>
+      <Content><![CDATA[Wiki Content]]></Content>
+    </StructureElement>
+    <StructureElement>
+      <ElementId>11111111-1111-1111-1111-111111111111</ElementId>
+      <ElementType>WebPart</ElementType>
+      <Order>1</Order>
+      <ZoneId>wpz</ZoneId>
+      <Content><![CDATA[Company Announcements]]></Content>
+    </StructureElement>
+    <StructureElement>
+      <ElementId>22222222-2222-2222-2222-222222222222</ElementId>
+      <ElementType>WebPart</ElementType>
+      <Order>2</Order>
+      <ZoneId>wpz</ZoneId>
+      <Content><![CDATA[Quick Tasks]]></Content>
+    </StructureElement>
+    <StructureElement>
+      <ElementId>33333333-3333-3333-3333-333333333333</ElementId>
+      <ElementType>WebPart</ElementType>
+      <Order>3</Order>
+      <ZoneId>RightZone</ZoneId>
+      <Content><![CDATA[Contact Information]]></Content>
+    </StructureElement>
+  </PageStructure>
+</SharePointPageData>
