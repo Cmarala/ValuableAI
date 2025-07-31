@@ -163,7 +163,78 @@ try {
             }
         }
         
-        # Get web part XML
+        # Get all web part properties using Get-PnPWebPartProperty
+        Write-Host "  Getting all web part properties..." -ForegroundColor Gray
+        try {
+            $webPartProperties = Get-PnPWebPartProperty -ServerRelativePageUrl $serverRelativePageUrl -Identity $wp.Id
+            
+            if ($webPartProperties) {
+                Write-Host "  Successfully retrieved $($webPartProperties.Count) properties" -ForegroundColor Green
+                
+                $propertiesElement = $xmlDoc.CreateElement("WebPartProperties")
+                $webPartElement.AppendChild($propertiesElement) | Out-Null
+                
+                # Process each property
+                foreach ($property in $webPartProperties.GetEnumerator()) {
+                    try {
+                        $propElement = $xmlDoc.CreateElement("Property")
+                        $propElement.SetAttribute("Name", $property.Key)
+                        $propertiesElement.AppendChild($propElement) | Out-Null
+                        
+                        $propValue = $property.Value
+                        if ($propValue -ne $null) {
+                            # Handle different property types
+                            if ($propValue -is [System.String]) {
+                                $propElement.SetAttribute("Type", "String")
+                                $propElement.InnerText = $propValue
+                            }
+                            elseif ($propValue -is [System.Boolean]) {
+                                $propElement.SetAttribute("Type", "Boolean")
+                                $propElement.InnerText = $propValue.ToString().ToLower()
+                            }
+                            elseif ($propValue -is [System.Int32] -or $propValue -is [System.Int64]) {
+                                $propElement.SetAttribute("Type", "Integer")
+                                $propElement.InnerText = $propValue.ToString()
+                            }
+                            elseif ($propValue -is [System.Guid]) {
+                                $propElement.SetAttribute("Type", "Guid")
+                                $propElement.InnerText = $propValue.ToString()
+                            }
+                            elseif ($propValue -is [System.Enum]) {
+                                $propElement.SetAttribute("Type", "Enum")
+                                $propElement.InnerText = $propValue.ToString()
+                            }
+                            else {
+                                $propElement.SetAttribute("Type", $propValue.GetType().Name)
+                                $propElement.InnerText = $propValue.ToString()
+                            }
+                        }
+                        else {
+                            $propElement.SetAttribute("Type", "Null")
+                            $propElement.InnerText = ""
+                        }
+                    }
+                    catch {
+                        Write-Warning "    Error processing property '$($property.Key)': $($_.Exception.Message)"
+                        $propElement = $xmlDoc.CreateElement("Property")
+                        $propElement.SetAttribute("Name", $property.Key)
+                        $propElement.SetAttribute("Type", "Error")
+                        $propElement.InnerText = "Error: $($_.Exception.Message)"
+                        $propertiesElement.AppendChild($propElement) | Out-Null
+                    }
+                }
+            }
+            else {
+                Write-Warning "  Could not retrieve properties for web part: $($wp.WebPart.Title)"
+                $webPartElement.AppendChild($xmlDoc.CreateElement("PropertiesStatus")).InnerText = "Could not retrieve properties"
+            }
+        }
+        catch {
+            Write-Warning "  Error getting properties for web part: $($_.Exception.Message)"
+            $webPartElement.AppendChild($xmlDoc.CreateElement("PropertiesError")).InnerText = $_.Exception.Message
+        }
+        
+        # Get web part XML using Get-PnPWebPartXml
         Write-Host "  Getting XML for web part: $($wp.WebPart.Title)" -ForegroundColor Gray
         try {
             $webPartXml = Get-PnPWebPartXml -ServerRelativePageUrl $serverRelativePageUrl -Identity $wp.Id
@@ -171,8 +242,12 @@ try {
             if ($webPartXml) {
                 Write-Host "  Successfully retrieved XML ($($webPartXml.Length) characters)" -ForegroundColor Green
                 
+                # Create XML Information section
+                $xmlInfoElement = $xmlDoc.CreateElement("XMLInformation")
+                $webPartElement.AppendChild($xmlInfoElement) | Out-Null
+                
                 # Save full XML
-                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartXML")).InnerText = $webPartXml
+                $xmlInfoElement.AppendChild($xmlDoc.CreateElement("FullXML")).InnerText = $webPartXml
                 
                 # Parse XML to get type and content
                 $xmlDoc2 = New-Object System.Xml.XmlDocument
@@ -213,9 +288,9 @@ try {
                     }
                 }
                 
-                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartFormat")).InnerText = $webPartFormat
+                $xmlInfoElement.AppendChild($xmlDoc.CreateElement("WebPartFormat")).InnerText = $webPartFormat
                 if ($actualTypeName) {
-                    $webPartElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
+                    $xmlInfoElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
                 }
                 
                 # Add additional zone information from XML
@@ -230,6 +305,9 @@ try {
                 if ($actualTypeName -and $actualTypeName -like "*ContentEditorWebPart*") {
                     Write-Host "  Extracting CEWP content..." -ForegroundColor Green
                     
+                    $cewpInfoElement = $xmlDoc.CreateElement("CEWPInformation")
+                    $xmlInfoElement.AppendChild($cewpInfoElement) | Out-Null
+                    
                     # Look for Content in ContentEditor namespace
                     $namespaceManager = New-Object System.Xml.XmlNamespaceManager($xmlDoc2.NameTable)
                     $namespaceManager.AddNamespace("ce", "http://schemas.microsoft.com/WebPart/v2/ContentEditor")
@@ -238,7 +316,7 @@ try {
                     if ($ceContentNodes.Count -gt 0) {
                         $cewpContent = $ceContentNodes[0].InnerText
                         if ($cewpContent -and -not [string]::IsNullOrWhiteSpace($cewpContent)) {
-                            $webPartElement.AppendChild($xmlDoc.CreateElement("CEWPContent")).InnerText = $cewpContent
+                            $cewpInfoElement.AppendChild($xmlDoc.CreateElement("Content")).InnerText = $cewpContent
                             Write-Host "  Successfully extracted CEWP content ($($cewpContent.Length) characters)" -ForegroundColor Green
                         }
                     }
@@ -246,30 +324,39 @@ try {
                     # Look for ContentLink
                     $ceLinkNodes = $xmlDoc2.SelectNodes("//ce:ContentLink", $namespaceManager)
                     if ($ceLinkNodes.Count -gt 0 -and $ceLinkNodes[0].InnerText) {
-                        $webPartElement.AppendChild($xmlDoc.CreateElement("CEWPContentLink")).InnerText = $ceLinkNodes[0].InnerText
+                        $cewpInfoElement.AppendChild($xmlDoc.CreateElement("ContentLink")).InnerText = $ceLinkNodes[0].InnerText
                     }
                 }
                 
-                # Extract ListView properties
+                # Extract ListView properties from XML
                 elseif ($actualTypeName -and ($actualTypeName -like "*ListViewWebPart*" -or $actualTypeName -like "*XsltListViewWebPart*")) {
-                    Write-Host "  Extracting ListView properties..." -ForegroundColor Green
+                    Write-Host "  Extracting ListView properties from XML..." -ForegroundColor Green
+                    
+                    $listViewInfoElement = $xmlDoc.CreateElement("ListViewInformation")
+                    $xmlInfoElement.AppendChild($listViewInfoElement) | Out-Null
                     
                     # Get ListId from XML
                     $listIdNodes = $xmlDoc2.SelectNodes("//property[@name='ListId']")
                     if ($listIdNodes.Count -gt 0 -and $listIdNodes[0].InnerText) {
-                        $webPartElement.AppendChild($xmlDoc.CreateElement("ListId")).InnerText = $listIdNodes[0].InnerText
+                        $listViewInfoElement.AppendChild($xmlDoc.CreateElement("ListId")).InnerText = $listIdNodes[0].InnerText
                     }
                     
                     # Get ListName from XML
                     $listNameNodes = $xmlDoc2.SelectNodes("//property[@name='ListName']")
                     if ($listNameNodes.Count -gt 0 -and $listNameNodes[0].InnerText) {
-                        $webPartElement.AppendChild($xmlDoc.CreateElement("ListName")).InnerText = $listNameNodes[0].InnerText
+                        $listViewInfoElement.AppendChild($xmlDoc.CreateElement("ListName")).InnerText = $listNameNodes[0].InnerText
                     }
                     
                     # Get TitleUrl from XML
                     $titleUrlNodes = $xmlDoc2.SelectNodes("//property[@name='TitleUrl']")
                     if ($titleUrlNodes.Count -gt 0 -and $titleUrlNodes[0].InnerText) {
-                        $webPartElement.AppendChild($xmlDoc.CreateElement("ListTitleUrl")).InnerText = $titleUrlNodes[0].InnerText
+                        $listViewInfoElement.AppendChild($xmlDoc.CreateElement("TitleUrl")).InnerText = $titleUrlNodes[0].InnerText
+                    }
+                    
+                    # Get View Definition
+                    $xmlDefNodes = $xmlDoc2.SelectNodes("//property[@name='XmlDefinition']")
+                    if ($xmlDefNodes.Count -gt 0 -and $xmlDefNodes[0].InnerText) {
+                        $listViewInfoElement.AppendChild($xmlDoc.CreateElement("XmlDefinition")).InnerText = $xmlDefNodes[0].InnerText
                     }
                 }
             }
