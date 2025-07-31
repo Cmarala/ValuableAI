@@ -46,9 +46,9 @@
               "target": "Package",
               "version": "[7.0.0, )"
             },
-            "Microsoft.SharePointOnline.CSOM": {
+            "PnP.Framework": {
               "target": "Package",
-              "version": "[16.1.24.112, )"
+              "version": "[1.12.0, )"
             },
             "System.CommandLine": {
               "target": "Package",

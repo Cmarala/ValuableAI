@@ -35,7 +35,7 @@ class Program
 
         var useModernAuthOption = new Option<bool>(
             name: "--use-modern-auth",
-            description: "Use modern authentication (interactive browser login)",
+            description: "Use modern authentication (interactive browser login) for MFA support",
             getDefaultValue: () => true);
 
         // Create root command
