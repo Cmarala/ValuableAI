@@ -555,28 +555,54 @@ try {
                                         # Always save the full XML for reference
                                         $typeSpecificElement.AppendChild($xmlDoc.CreateElement("WebPartXML")).InnerText = $webPartXml
                                         
-                                        # Check the actual TypeName from XML
-                                        $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
-                                        if ($typeNameNodes.Count -gt 0) {
-                                            $actualTypeName = $typeNameNodes[0].InnerText
-                                            $typeSpecificElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
-                                            Write-Host "Actual TypeName from XML: $actualTypeName" -ForegroundColor Cyan
+                                        # Detect the actual web part type from XML structure and TypeName
+                                        $actualTypeName = $null
+                                        $xmlWebPartType = "Unknown"
+                                        
+                                        # Check for v2 WebPart format (ContentEditor style)
+                                        $v2WebPartNodes = $xmlDoc2.SelectNodes("//WebPart[@xmlns='http://schemas.microsoft.com/WebPart/v2']")
+                                        if ($v2WebPartNodes.Count -gt 0) {
+                                            $xmlWebPartType = "WebPart_v2"
+                                            $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                                            if ($typeNameNodes.Count -gt 0) {
+                                                $actualTypeName = $typeNameNodes[0].InnerText
+                                                Write-Host "Found v2 WebPart with TypeName: $actualTypeName" -ForegroundColor Cyan
+                                            }
+                                        }
+                                        # Check for v3 webParts format (ListView style)
+                                        else {
+                                            $v3WebPartNodes = $xmlDoc2.SelectNodes("//webPart[@xmlns='http://schemas.microsoft.com/WebPart/v3']")
+                                            if ($v3WebPartNodes.Count -gt 0) {
+                                                $xmlWebPartType = "webPart_v3"
+                                                $typeNodes = $xmlDoc2.SelectNodes("//type/@name")
+                                                if ($typeNodes.Count -gt 0) {
+                                                    $actualTypeName = $typeNodes[0].Value
+                                                    Write-Host "Found v3 webPart with type name: $actualTypeName" -ForegroundColor Cyan
+                                                }
+                                            }
                                         }
                                         
-                                        # Special handling for Content Editor Web Part
-                                        if ($detectedType -eq "ContentEditor" -or ($actualTypeName -and $actualTypeName -like "*ContentEditorWebPart*")) {
-                                            Write-Host "Processing ContentEditorWebPart content..." -ForegroundColor Cyan
+                                        $typeSpecificElement.AppendChild($xmlDoc.CreateElement("XMLWebPartType")).InnerText = $xmlWebPartType
+                                        if ($actualTypeName) {
+                                            $typeSpecificElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
+                                        }
+                                        
+                                        # Only process CEWP content if this is actually a ContentEditorWebPart
+                                        $isActualCEWP = ($actualTypeName -and $actualTypeName -like "*ContentEditorWebPart*")
+                                        
+                                        if ($isActualCEWP) {
+                                            Write-Host "Processing ContentEditorWebPart content for correct web part..." -ForegroundColor Green
                                             
                                             $cewpContent = $null
                                             $contentLink = $null
                                             
-                                            # Method 1: Look for Content in ContentEditor namespace (most reliable)
+                                            # Method 1: Look for Content in ContentEditor namespace (most reliable for v2 format)
                                             $namespaceManager = New-Object System.Xml.XmlNamespaceManager($xmlDoc2.NameTable)
                                             $namespaceManager.AddNamespace("ce", "http://schemas.microsoft.com/WebPart/v2/ContentEditor")
                                             $ceContentNodes = $xmlDoc2.SelectNodes("//ce:Content", $namespaceManager)
                                             if ($ceContentNodes.Count -gt 0) {
                                                 $cewpContent = $ceContentNodes[0].InnerText
-                                                Write-Host "Found CEWP content in ContentEditor namespace" -ForegroundColor Green
+                                                Write-Host "Found CEWP content in ContentEditor namespace: $($cewpContent.Length) characters" -ForegroundColor Green
                                             }
                                             
                                             # Method 2: Look for ContentLink in ContentEditor namespace
@@ -584,23 +610,6 @@ try {
                                             if ($ceLinkNodes.Count -gt 0) {
                                                 $contentLink = $ceLinkNodes[0].InnerText
                                                 Write-Host "Found CEWP ContentLink in ContentEditor namespace" -ForegroundColor Green
-                                            }
-                                            
-                                            # Method 3: Fallback to property elements
-                                            if (-not $cewpContent) {
-                                                $contentNodes = $xmlDoc2.SelectNodes("//property[@name='Content']")
-                                                if ($contentNodes.Count -gt 0) {
-                                                    $cewpContent = $contentNodes[0].InnerText
-                                                    Write-Host "Found content in property[@name='Content']" -ForegroundColor Green
-                                                }
-                                            }
-                                            
-                                            if (-not $contentLink) {
-                                                $linkNodes = $xmlDoc2.SelectNodes("//property[@name='ContentLink']")
-                                                if ($linkNodes.Count -gt 0) {
-                                                    $contentLink = $linkNodes[0].InnerText
-                                                    Write-Host "Found ContentLink in property[@name='ContentLink']" -ForegroundColor Green
-                                                }
                                             }
                                             
                                             # Add extracted content to XML
@@ -616,9 +625,16 @@ try {
                                                 $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentLink")).InnerText = $contentLink
                                             }
                                         }
+                                        elseif ($detectedType -eq "ContentEditor") {
+                                            # Web part was detected as CEWP but XML doesn't match
+                                            Write-Host "Web part detected as CEWP but XML shows different type: $actualTypeName" -ForegroundColor Yellow
+                                            $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentStatus")).InnerText = "Detected as CEWP but XML shows different type: $actualTypeName"
+                                        }
                                         
-                                        # Extract other useful properties from XML based on web part type
-                                        if ($detectedType -eq "ListView" -or ($actualTypeName -and $actualTypeName -like "*ListViewWebPart*")) {
+                                        # Extract ListView specific properties if this is actually a ListView
+                                        $isActualListView = ($actualTypeName -and ($actualTypeName -like "*ListViewWebPart*" -or $actualTypeName -like "*XsltListViewWebPart*"))
+                                        if ($isActualListView) {
+                                            Write-Host "Processing ListView properties..." -ForegroundColor Cyan
                                             # Extract ListView specific properties from XML if needed
                                             $listUrlNodes = $xmlDoc2.SelectNodes("//property[@name='ListUrl']")
                                             if ($listUrlNodes.Count -gt 0 -and $listUrlNodes[0].InnerText) {
