@@ -535,9 +535,22 @@ try {
                               
                                                                                                                              # Extract web part XML for all web parts (especially for CEWP content)
                                 Write-Host "Getting web part XML for: $($webPart.WebPart.Title) (ID: $($webPart.Id))" -ForegroundColor Yellow
+                                Write-Host "  Using ServerRelativePageUrl: $serverRelativePageUrl" -ForegroundColor Gray
+                                Write-Host "  Web part ID: $($webPart.Id)" -ForegroundColor Gray
+                                
                                 try {
                                     # Use the approach from your reference code
+                                    Write-Host "  Calling Get-PnPWebPartXml..." -ForegroundColor Gray
                                     $webPartXml = Get-PnPWebPartXml -ServerRelativePageUrl $serverRelativePageUrl -Identity $webPart.Id
+                                    
+                                    if ($webPartXml) {
+                                        Write-Host "  XML Length: $($webPartXml.Length) characters" -ForegroundColor Gray
+                                        # Show first 200 characters of XML for debugging
+                                        $xmlPreview = if ($webPartXml.Length -gt 200) { $webPartXml.Substring(0, 200) + "..." } else { $webPartXml }
+                                        Write-Host "  XML Preview: $xmlPreview" -ForegroundColor Gray
+                                    } else {
+                                        Write-Host "  XML is null or empty" -ForegroundColor Red
+                                    }
                                     
                                     if ($webPartXml) {
                                         Write-Host "Successfully retrieved web part XML" -ForegroundColor Green
@@ -559,28 +572,36 @@ try {
                                         $actualTypeName = $null
                                         $xmlWebPartType = "Unknown"
                                         
-                                        # Check for v2 WebPart format (ContentEditor style)
-                                        $v2WebPartNodes = $xmlDoc2.SelectNodes("//WebPart[@xmlns='http://schemas.microsoft.com/WebPart/v2']")
-                                        if ($v2WebPartNodes.Count -gt 0) {
-                                            $xmlWebPartType = "WebPart_v2"
-                                            $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
-                                            if ($typeNameNodes.Count -gt 0) {
-                                                $actualTypeName = $typeNameNodes[0].InnerText
-                                                Write-Host "Found v2 WebPart with TypeName: $actualTypeName" -ForegroundColor Cyan
-                                            }
-                                        }
-                                        # Check for v3 webParts format (ListView style)
-                                        else {
-                                            $v3WebPartNodes = $xmlDoc2.SelectNodes("//webPart[@xmlns='http://schemas.microsoft.com/WebPart/v3']")
-                                            if ($v3WebPartNodes.Count -gt 0) {
-                                                $xmlWebPartType = "webPart_v3"
-                                                $typeNodes = $xmlDoc2.SelectNodes("//type/@name")
-                                                if ($typeNodes.Count -gt 0) {
-                                                    $actualTypeName = $typeNodes[0].Value
-                                                    Write-Host "Found v3 webPart with type name: $actualTypeName" -ForegroundColor Cyan
-                                                }
-                                            }
-                                        }
+                                                                # Check for v2 WebPart format (ContentEditor style) - more flexible namespace detection
+                        $v2WebPartNodes = $xmlDoc2.SelectNodes("//WebPart")
+                        $v2NamespaceNodes = $xmlDoc2.SelectNodes("//*[namespace-uri()='http://schemas.microsoft.com/WebPart/v2']")
+                        
+                        if ($v2WebPartNodes.Count -gt 0 -and $v2NamespaceNodes.Count -gt 0) {
+                            $xmlWebPartType = "WebPart_v2"
+                            $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                            if ($typeNameNodes.Count -gt 0) {
+                                $actualTypeName = $typeNameNodes[0].InnerText
+                                Write-Host "Found v2 WebPart with TypeName: $actualTypeName" -ForegroundColor Cyan
+                            }
+                        }
+                        # Check for v3 webParts format (ListView style)
+                        elseif ($xmlDoc2.SelectNodes("//webParts").Count -gt 0 -or $xmlDoc2.SelectNodes("//webPart").Count -gt 0) {
+                            $xmlWebPartType = "webPart_v3"
+                            $typeNodes = $xmlDoc2.SelectNodes("//type/@name")
+                            if ($typeNodes.Count -gt 0) {
+                                $actualTypeName = $typeNodes[0].Value
+                                Write-Host "Found v3 webPart with type name: $actualTypeName" -ForegroundColor Cyan
+                            }
+                        }
+                        else {
+                            # Try to detect TypeName regardless of format
+                            $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                            if ($typeNameNodes.Count -gt 0) {
+                                $actualTypeName = $typeNameNodes[0].InnerText
+                                $xmlWebPartType = "WebPart_v2_detected"
+                                Write-Host "Detected TypeName without clear format: $actualTypeName" -ForegroundColor Yellow
+                            }
+                        }
                                         
                                         $typeSpecificElement.AppendChild($xmlDoc.CreateElement("XMLWebPartType")).InnerText = $xmlWebPartType
                                         if ($actualTypeName) {
@@ -644,14 +665,164 @@ try {
                                     }
                                     else {
                                         Write-Warning "Could not retrieve web part XML for ID: $($webPart.Id)"
-                                        if (-not $typeSpecificElement) {
-                                            $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
-                                            $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
+                                        Write-Host "Trying alternative approach to get web part XML..." -ForegroundColor Yellow
+                                        
+                                        # Try to get all web parts and match by title or other properties
+                                        try {
+                                            $allWebParts = Get-PnPWebPart -ServerRelativePageUrl $serverRelativePageUrl
+                                            Write-Host "Found $($allWebParts.Count) total web parts on page" -ForegroundColor Cyan
+                                            
+                                            $matchingWebPart = $null
+                                            for ($i = 0; $i -lt $allWebParts.Count; $i++) {
+                                                $wpTitle = if ($allWebParts[$i].WebPart.Title) { $allWebParts[$i].WebPart.Title } else { "No Title" }
+                                                Write-Host "  Web part $i : ID=$($allWebParts[$i].Id), Title=$wpTitle" -ForegroundColor Gray
+                                                
+                                                if ($allWebParts[$i].Id -eq $webPart.Id) {
+                                                    $matchingWebPart = $allWebParts[$i]
+                                                    Write-Host "  Found matching web part at index $i" -ForegroundColor Green
+                                                    
+                                                    # Try to get XML by index
+                                                    try {
+                                                        $webPartXml = Get-PnPWebPartXml -ServerRelativePageUrl $serverRelativePageUrl -Identity $i
+                                                        if ($webPartXml) {
+                                                            Write-Host "Successfully retrieved XML using index $i" -ForegroundColor Green
+                                                            break
+                                                        }
+                                                    }
+                                                    catch {
+                                                        Write-Host "Failed to get XML by index: $($_.Exception.Message)" -ForegroundColor Red
+                                                    }
+                                                }
+                                            }
                                         }
-                                        $typeSpecificElement.AppendChild($xmlDoc.CreateElement("WebPartXMLStatus")).InnerText = "Could not retrieve web part XML"
+                                        catch {
+                                            Write-Warning "Alternative approach failed: $($_.Exception.Message)"
+                                        }
+                                        
+                                        if (-not $webPartXml) {
+                                            if (-not $typeSpecificElement) {
+                                                $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
+                                                $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
+                                            }
+                                            $typeSpecificElement.AppendChild($xmlDoc.CreateElement("WebPartXMLStatus")).InnerText = "Could not retrieve web part XML using any method"
+                                        }
                                     }
-                                }
-                                catch {
+                                    
+                                                                         # Process the XML if we got it (either from original call or fallback)
+                                     if ($webPartXml) {
+                                         # Continue with XML processing (this duplicates the logic above but ensures it runs for fallback XML too)
+                                         Write-Host "Processing retrieved XML..." -ForegroundColor Green
+                                         
+                                         # Create TypeSpecificProperties element if it doesn't exist
+                                         if (-not $typeSpecificElement) {
+                                             $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
+                                             $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
+                                         }
+                                         
+                                         # Parse the XML to extract specific content
+                                         $xmlDoc2 = New-Object System.Xml.XmlDocument
+                                         $xmlDoc2.LoadXml($webPartXml)
+                                         
+                                         # Always save the full XML for reference
+                                         $typeSpecificElement.AppendChild($xmlDoc.CreateElement("WebPartXML")).InnerText = $webPartXml
+                                         
+                                         # Detect the actual web part type from XML structure and TypeName
+                                         $actualTypeName = $null
+                                         $xmlWebPartType = "Unknown"
+                                         
+                                         # Check for v2 WebPart format (ContentEditor style) - more flexible namespace detection
+                                         $v2WebPartNodes = $xmlDoc2.SelectNodes("//WebPart")
+                                         $v2NamespaceNodes = $xmlDoc2.SelectNodes("//*[namespace-uri()='http://schemas.microsoft.com/WebPart/v2']")
+                                         
+                                         if ($v2WebPartNodes.Count -gt 0 -and $v2NamespaceNodes.Count -gt 0) {
+                                             $xmlWebPartType = "WebPart_v2"
+                                             $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                                             if ($typeNameNodes.Count -gt 0) {
+                                                 $actualTypeName = $typeNameNodes[0].InnerText
+                                                 Write-Host "Found v2 WebPart with TypeName: $actualTypeName" -ForegroundColor Cyan
+                                             }
+                                         }
+                                         # Check for v3 webParts format (ListView style)
+                                         elseif ($xmlDoc2.SelectNodes("//webParts").Count -gt 0 -or $xmlDoc2.SelectNodes("//webPart").Count -gt 0) {
+                                             $xmlWebPartType = "webPart_v3"
+                                             $typeNodes = $xmlDoc2.SelectNodes("//type/@name")
+                                             if ($typeNodes.Count -gt 0) {
+                                                 $actualTypeName = $typeNodes[0].Value
+                                                 Write-Host "Found v3 webPart with type name: $actualTypeName" -ForegroundColor Cyan
+                                             }
+                                         }
+                                         else {
+                                             # Try to detect TypeName regardless of format
+                                             $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                                             if ($typeNameNodes.Count -gt 0) {
+                                                 $actualTypeName = $typeNameNodes[0].InnerText
+                                                 $xmlWebPartType = "WebPart_v2_detected"
+                                                 Write-Host "Detected TypeName without clear format: $actualTypeName" -ForegroundColor Yellow
+                                             }
+                                         }
+                                         
+                                         $typeSpecificElement.AppendChild($xmlDoc.CreateElement("XMLWebPartType")).InnerText = $xmlWebPartType
+                                         if ($actualTypeName) {
+                                             $typeSpecificElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
+                                         }
+                                         
+                                         # Only process CEWP content if this is actually a ContentEditorWebPart
+                                         $isActualCEWP = ($actualTypeName -and $actualTypeName -like "*ContentEditorWebPart*")
+                                         
+                                         if ($isActualCEWP) {
+                                             Write-Host "Processing ContentEditorWebPart content for correct web part..." -ForegroundColor Green
+                                             
+                                             $cewpContent = $null
+                                             $contentLink = $null
+                                             
+                                             # Method 1: Look for Content in ContentEditor namespace (most reliable for v2 format)
+                                             $namespaceManager = New-Object System.Xml.XmlNamespaceManager($xmlDoc2.NameTable)
+                                             $namespaceManager.AddNamespace("ce", "http://schemas.microsoft.com/WebPart/v2/ContentEditor")
+                                             $ceContentNodes = $xmlDoc2.SelectNodes("//ce:Content", $namespaceManager)
+                                             if ($ceContentNodes.Count -gt 0) {
+                                                 $cewpContent = $ceContentNodes[0].InnerText
+                                                 Write-Host "Found CEWP content in ContentEditor namespace: $($cewpContent.Length) characters" -ForegroundColor Green
+                                             }
+                                             
+                                             # Method 2: Look for ContentLink in ContentEditor namespace
+                                             $ceLinkNodes = $xmlDoc2.SelectNodes("//ce:ContentLink", $namespaceManager)
+                                             if ($ceLinkNodes.Count -gt 0) {
+                                                 $contentLink = $ceLinkNodes[0].InnerText
+                                                 Write-Host "Found CEWP ContentLink in ContentEditor namespace" -ForegroundColor Green
+                                             }
+                                             
+                                             # Add extracted content to XML
+                                             if ($cewpContent -and -not [string]::IsNullOrWhiteSpace($cewpContent)) {
+                                                 $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContent")).InnerText = $cewpContent
+                                                 Write-Host "Successfully extracted CEWP content: $($cewpContent.Length) characters" -ForegroundColor Green
+                                             } else {
+                                                 $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentStatus")).InnerText = "No content found in CEWP XML"
+                                                 Write-Warning "No content found in CEWP"
+                                             }
+                                             
+                                             if ($contentLink -and -not [string]::IsNullOrWhiteSpace($contentLink)) {
+                                                 $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentLink")).InnerText = $contentLink
+                                             }
+                                         }
+                                         elseif ($detectedType -eq "ContentEditor") {
+                                             # Web part was detected as CEWP but XML doesn't match
+                                             Write-Host "Web part detected as CEWP but XML shows different type: $actualTypeName" -ForegroundColor Yellow
+                                             $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentStatus")).InnerText = "Detected as CEWP but XML shows different type: $actualTypeName"
+                                         }
+                                         
+                                         # Extract ListView specific properties if this is actually a ListView
+                                         $isActualListView = ($actualTypeName -and ($actualTypeName -like "*ListViewWebPart*" -or $actualTypeName -like "*XsltListViewWebPart*"))
+                                         if ($isActualListView) {
+                                             Write-Host "Processing ListView properties..." -ForegroundColor Cyan
+                                             # Extract ListView specific properties from XML if needed
+                                             $listUrlNodes = $xmlDoc2.SelectNodes("//property[@name='ListUrl']")
+                                             if ($listUrlNodes.Count -gt 0 -and $listUrlNodes[0].InnerText) {
+                                                 $typeSpecificElement.AppendChild($xmlDoc.CreateElement("ListUrl")).InnerText = $listUrlNodes[0].InnerText
+                                             }
+                                         }
+                                     }
+                                 }
+                                 catch {
                                     Write-Warning "Error retrieving web part XML for ID $($webPart.Id): $($_.Exception.Message)"
                                     if (-not $typeSpecificElement) {
                                         $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
