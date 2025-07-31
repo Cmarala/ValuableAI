@@ -456,8 +456,9 @@ try {
                              if ($webPart.WebPart.Properties -and $webPart.WebPart.Properties.FieldValues) {
                                  $props = $webPart.WebPart.Properties.FieldValues
                                  
-                                 # Check for List View Web Part
-                                 if ($props.ContainsKey("ListName") -or $props.ContainsKey("ListId") -or $props.ContainsKey("ViewGuid")) {
+                                 # Check for List View Web Part (more specific criteria)
+                                 if (($props.ContainsKey("ListName") -or $props.ContainsKey("ListId")) -and 
+                                     ($props.ContainsKey("ViewFlags") -or $props.ContainsKey("XmlDefinition"))) {
                                      $detectedType = "ListView"
                                      if ($props["ListName"]) { $typeProperties["ListName"] = $props["ListName"] }
                                      if ($props["ListId"]) { $typeProperties["ListId"] = $props["ListId"] }
@@ -466,8 +467,9 @@ try {
                                      if ($props["ViewFlags"]) { $typeProperties["ViewFlags"] = $props["ViewFlags"] }
                                      if ($props["XslLink"]) { $typeProperties["XslLink"] = $props["XslLink"] }
                                  }
-                                 # Check for Content Editor Web Part
-                                 elseif ($props.ContainsKey("Content") -or $props.ContainsKey("ContentLink")) {
+                                 # Check for Content Editor Web Part (exclude if it has ListView properties)
+                                 elseif (($props.ContainsKey("Content") -or $props.ContainsKey("ContentLink")) -and 
+                                         -not ($props.ContainsKey("ListName") -or $props.ContainsKey("ListId"))) {
                                      $detectedType = "ContentEditor"
                                      if ($props["Content"]) { $typeProperties["Content"] = $props["Content"] }
                                      if ($props["ContentLink"]) { $typeProperties["ContentLink"] = $props["ContentLink"] }
@@ -503,21 +505,38 @@ try {
                                   }
                               }
                               
-                                                             # Special handling for Content Editor Web Part content
-                               if ($detectedType -eq "ContentEditor") {
-                                   Write-Host "Attempting to retrieve CEWP content using Get-PnPWebPartXml..." -ForegroundColor Yellow
-                                   try {
-                                       # Use the correct PnP PowerShell 2016 cmdlet
-                                       $webPartXml = Get-PnPWebPartXml -ServerRelativePageUrl $serverRelativePageUrl -Identity $webPart.Id -ErrorAction SilentlyContinue
+                                                                                             # Special handling for Content Editor Web Part content
+                                if ($detectedType -eq "ContentEditor") {
+                                    Write-Host "Attempting to retrieve CEWP content for web part: $($webPart.WebPart.Title) (ID: $($webPart.Id))" -ForegroundColor Yellow
+                                    try {
+                                        # Use the correct PnP PowerShell 2016 cmdlet with the specific web part ID
+                                        Write-Host "Getting XML for web part ID: $($webPart.Id)" -ForegroundColor Cyan
+                                        $webPartXml = Get-PnPWebPartXml -ServerRelativePageUrl $serverRelativePageUrl -Identity $webPart.Id -ErrorAction SilentlyContinue
                                        
-                                       if ($webPartXml) {
-                                           Write-Host "Retrieved web part XML definition" -ForegroundColor Green
-                                           
-                                           # Parse the XML to find Content property
-                                           $xmlDoc2 = New-Object System.Xml.XmlDocument
-                                           $xmlDoc2.LoadXml($webPartXml)
-                                           
-                                           $cewpContent = $null
+                                                                               if ($webPartXml) {
+                                            Write-Host "Retrieved web part XML definition" -ForegroundColor Green
+                                            
+                                            # Parse the XML to find Content property
+                                            $xmlDoc2 = New-Object System.Xml.XmlDocument
+                                            $xmlDoc2.LoadXml($webPartXml)
+                                            
+                                            # Validate that this is actually a ContentEditorWebPart
+                                            $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                                            $isActualCEWP = $false
+                                            if ($typeNameNodes.Count -gt 0) {
+                                                $typeName = $typeNameNodes[0].InnerText
+                                                Write-Host "Web part TypeName: $typeName" -ForegroundColor Cyan
+                                                if ($typeName -like "*ContentEditorWebPart*") {
+                                                    $isActualCEWP = $true
+                                                    Write-Host "Confirmed this is a ContentEditorWebPart" -ForegroundColor Green
+                                                } else {
+                                                    Write-Host "This is not a ContentEditorWebPart, skipping content extraction" -ForegroundColor Yellow
+                                                }
+                                            }
+                                            
+                                            $cewpContent = $null
+                                            
+                                            if ($isActualCEWP) {
                                            
                                            # Method 1: Look for Content property with name attribute
                                            $contentNodes = $xmlDoc2.SelectNodes("//property[@name='Content']")
@@ -535,46 +554,67 @@ try {
                                                }
                                            }
                                            
-                                           # Method 3: Look for ContentLink property
-                                           $contentLinkNodes = $xmlDoc2.SelectNodes("//property[@name='ContentLink']")
-                                           $contentLink = $null
-                                           if ($contentLinkNodes.Count -gt 0) {
-                                               $contentLink = $contentLinkNodes[0].InnerText
-                                               Write-Host "Found ContentLink: $contentLink" -ForegroundColor Green
-                                           }
-                                           
-                                           # Create TypeSpecificProperties element if it doesn't exist
-                                           if (-not $typeSpecificElement) {
-                                               $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
-                                               $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
-                                           }
-                                           
-                                           # Add the content if found
-                                           if ($cewpContent) {
-                                               $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContent")).InnerText = $cewpContent
-                                               Write-Host "Successfully extracted CEWP content" -ForegroundColor Green
-                                           }
-                                           else {
-                                               $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentStatus")).InnerText = "No content found in web part XML"
-                                               Write-Warning "No content found in CEWP XML"
-                                           }
-                                           
-                                           # Add ContentLink if found
-                                           if ($contentLink) {
-                                               $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentLink")).InnerText = $contentLink
-                                           }
-                                           
-                                           # Save the full XML for debugging/reference
-                                           $typeSpecificElement.AppendChild($xmlDoc.CreateElement("WebPartXML")).InnerText = $webPartXml
-                                           
-                                           # Also try to extract other common CEWP properties from XML
-                                           $additionalProperties = @("PartImageSmall", "PartImageLarge", "IsIncluded", "FrameType", "SuppressWebPartChrome")
-                                           foreach ($propName in $additionalProperties) {
-                                               $propNodes = $xmlDoc2.SelectNodes("//property[@name='$propName']")
-                                               if ($propNodes.Count -gt 0 -and $propNodes[0].InnerText) {
-                                                   $typeSpecificElement.AppendChild($xmlDoc.CreateElement($propName)).InnerText = $propNodes[0].InnerText
-                                               }
-                                           }
+                                                                                       # Method 3: Look for ContentLink property
+                                            $contentLinkNodes = $xmlDoc2.SelectNodes("//property[@name='ContentLink']")
+                                            $contentLink = $null
+                                            if ($contentLinkNodes.Count -gt 0) {
+                                                $contentLink = $contentLinkNodes[0].InnerText
+                                                Write-Host "Found ContentLink: $contentLink" -ForegroundColor Green
+                                            }
+                                            
+                                            # Method 4: Look for Content in the ContentEditor namespace
+                                            if (-not $cewpContent) {
+                                                $namespaceManager = New-Object System.Xml.XmlNamespaceManager($xmlDoc2.NameTable)
+                                                $namespaceManager.AddNamespace("ce", "http://schemas.microsoft.com/WebPart/v2/ContentEditor")
+                                                $ceContentNodes = $xmlDoc2.SelectNodes("//ce:Content", $namespaceManager)
+                                                if ($ceContentNodes.Count -gt 0) {
+                                                    $cewpContent = $ceContentNodes[0].InnerText
+                                                    Write-Host "Found content in ContentEditor namespace" -ForegroundColor Green
+                                                }
+                                            }
+                                            
+                                            # Create TypeSpecificProperties element if it doesn't exist
+                                            if (-not $typeSpecificElement) {
+                                                $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
+                                                $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
+                                            }
+                                            
+                                            # Add the content if found
+                                            if ($cewpContent) {
+                                                $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContent")).InnerText = $cewpContent
+                                                Write-Host "Successfully extracted CEWP content" -ForegroundColor Green
+                                            }
+                                            else {
+                                                $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentStatus")).InnerText = "No content found in web part XML"
+                                                Write-Warning "No content found in CEWP XML"
+                                            }
+                                            
+                                            # Add ContentLink if found
+                                            if ($contentLink) {
+                                                $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentLink")).InnerText = $contentLink
+                                            }
+                                            
+                                            # Save the full XML for debugging/reference
+                                            $typeSpecificElement.AppendChild($xmlDoc.CreateElement("WebPartXML")).InnerText = $webPartXml
+                                            
+                                            # Also try to extract other common CEWP properties from XML
+                                            $additionalProperties = @("PartImageSmall", "PartImageLarge", "IsIncluded", "FrameType", "SuppressWebPartChrome")
+                                            foreach ($propName in $additionalProperties) {
+                                                $propNodes = $xmlDoc2.SelectNodes("//property[@name='$propName']")
+                                                if ($propNodes.Count -gt 0 -and $propNodes[0].InnerText) {
+                                                    $typeSpecificElement.AppendChild($xmlDoc.CreateElement($propName)).InnerText = $propNodes[0].InnerText
+                                                }
+                                            }
+                                            
+                                            } else {
+                                                # Not actually a CEWP, just save the XML for reference
+                                                if (-not $typeSpecificElement) {
+                                                    $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
+                                                    $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
+                                                }
+                                                $typeSpecificElement.AppendChild($xmlDoc.CreateElement("CEWPContentStatus")).InnerText = "Web part is not actually a ContentEditorWebPart"
+                                                $typeSpecificElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $typeName
+                                            }
                                        }
                                        else {
                                            Write-Warning "Could not retrieve web part XML using Get-PnPWebPartXml"
