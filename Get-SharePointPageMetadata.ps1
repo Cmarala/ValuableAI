@@ -342,14 +342,41 @@ try {
                         $webPartElement = $xmlDoc.CreateElement("WebPart")
                         $zoneElement.AppendChild($webPartElement) | Out-Null
                         
-                        # Basic web part information
-                        if ($webPart.Id) {
-                            $webPartElement.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $webPart.Id.ToString()
-                        }
-                        
-                        if ($webPart.ZoneIndex -ne $null) {
-                            $webPartElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $webPart.ZoneIndex.ToString()
-                        }
+                                                 # Basic web part information
+                         if ($webPart.Id) {
+                             $webPartElement.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $webPart.Id.ToString()
+                         }
+                         
+                         # Layout Properties
+                         $layoutElement = $xmlDoc.CreateElement("LayoutProperties")
+                         $webPartElement.AppendChild($layoutElement) | Out-Null
+                         
+                         if ($webPart.ZoneIndex -ne $null) {
+                             $layoutElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $webPart.ZoneIndex.ToString()
+                         }
+                         
+                         if ($webPart.ZoneId) {
+                             $layoutElement.AppendChild($xmlDoc.CreateElement("ZoneId")).InnerText = $webPart.ZoneId
+                         }
+                         
+                         # Try to get additional layout properties
+                         try {
+                             if ($webPart.WebPart -and $webPart.WebPart.Zone) {
+                                 $layoutElement.AppendChild($xmlDoc.CreateElement("ZoneName")).InnerText = $webPart.WebPart.Zone.ID
+                             }
+                         } catch { }
+                         
+                         try {
+                             if ($webPart.WebPart -and $webPart.WebPart.IsIncluded -ne $null) {
+                                 $layoutElement.AppendChild($xmlDoc.CreateElement("IsIncluded")).InnerText = $webPart.WebPart.IsIncluded.ToString()
+                             }
+                         } catch { }
+                         
+                         try {
+                             if ($webPart.WebPart -and $webPart.WebPart.IsClosed -ne $null) {
+                                 $layoutElement.AppendChild($xmlDoc.CreateElement("IsClosed")).InnerText = $webPart.WebPart.IsClosed.ToString()
+                             }
+                         } catch { }
                         
                         # Web part object properties
                         if ($webPart.WebPart) {
@@ -390,11 +417,42 @@ try {
                                 }
                             } catch { }
                             
-                            try {
-                                if ($webPart.WebPart.Height) {
-                                    $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Height")).InnerText = $webPart.WebPart.Height.ToString()
-                                }
-                            } catch { }
+                                                         try {
+                                 if ($webPart.WebPart.Height) {
+                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Height")).InnerText = $webPart.WebPart.Height.ToString()
+                                 }
+                             } catch { }
+                             
+                             # Additional layout and positioning properties
+                             try {
+                                 if ($webPart.WebPart.AllowZoneChange -ne $null) {
+                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowZoneChange")).InnerText = $webPart.WebPart.AllowZoneChange.ToString()
+                                 }
+                             } catch { }
+                             
+                             try {
+                                 if ($webPart.WebPart.AllowLayoutChange -ne $null) {
+                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowLayoutChange")).InnerText = $webPart.WebPart.AllowLayoutChange.ToString()
+                                 }
+                             } catch { }
+                             
+                             try {
+                                 if ($webPart.WebPart.AllowMinimize -ne $null) {
+                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowMinimize")).InnerText = $webPart.WebPart.AllowMinimize.ToString()
+                                 }
+                             } catch { }
+                             
+                             try {
+                                 if ($webPart.WebPart.AllowClose -ne $null) {
+                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowClose")).InnerText = $webPart.WebPart.AllowClose.ToString()
+                                 }
+                             } catch { }
+                             
+                             try {
+                                 if ($webPart.WebPart.ChromeState) {
+                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("ChromeState")).InnerText = $webPart.WebPart.ChromeState.ToString()
+                                 }
+                             } catch { }
                             
                             # Try to get specific properties for common web part types
                             $webPartTypeName = $webPart.WebPart.GetType().Name
