@@ -1,0 +1,288 @@
+# SharePoint 2016 Page Information Extractor (Simplified)
+# Run Connect-SharePoint.ps1 first to authenticate
+
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$PageUrl = "SitePages/stars.aspx",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$OutputFolder = "C:\Users\cmarala\Desktop\Ford\Output"
+)
+
+Write-Host "=== SharePoint Page Information Extractor ===" -ForegroundColor Cyan
+Write-Host "Page: $PageUrl" -ForegroundColor Yellow
+
+# Check if already connected
+try {
+    $context = Get-PnPContext -ErrorAction Stop
+    if ($null -eq $context) {
+        throw "No active connection"
+    }
+    Write-Host "Using existing SharePoint connection" -ForegroundColor Green
+}
+catch {
+    Write-Error "No active SharePoint connection found."
+    Write-Host "Please run Connect-SharePoint.ps1 first to authenticate." -ForegroundColor Red
+    exit 1
+}
+
+# Create output folder if it doesn't exist
+if (!(Test-Path $OutputFolder)) { 
+    New-Item -Path $OutputFolder -ItemType Directory -Force
+    Write-Host "Created output folder: $OutputFolder" -ForegroundColor Green
+}
+
+try {
+    # Get the web information
+    Write-Host "`nGetting web information..." -ForegroundColor Yellow
+    $web = Get-PnPWeb
+    Write-Host "Connected to: $($web.Title)" -ForegroundColor Green
+    
+    # Get the page file
+    Write-Host "`nGetting page file..." -ForegroundColor Yellow
+    $pageFile = Get-PnPFile -Url $PageUrl -ErrorAction Stop
+    Write-Host "Page file: $($pageFile.Name)" -ForegroundColor Green
+    
+    # Get the page as list item
+    Write-Host "`nGetting page list item..." -ForegroundColor Yellow
+    $page = Get-PnPFile -Url $PageUrl -AsListItem -ErrorAction Stop
+    Write-Host "Page title: $($page['Title'])" -ForegroundColor Green
+    
+    # Construct server relative URL for web parts
+    $serverRelativePageUrl = $pageFile.ServerRelativeUrl
+    if (-not $serverRelativePageUrl) {
+        if ($web.ServerRelativeUrl -eq "/") {
+            $serverRelativePageUrl = "/$PageUrl"
+        } else {
+            $serverRelativePageUrl = "$($web.ServerRelativeUrl)/$PageUrl"
+        }
+    }
+    Write-Host "Server relative URL: $serverRelativePageUrl" -ForegroundColor Cyan
+    
+    # Get all web parts
+    Write-Host "`nGetting all web parts..." -ForegroundColor Yellow
+    $webParts = Get-PnPWebPart -ServerRelativePageUrl $serverRelativePageUrl
+    Write-Host "Found $($webParts.Count) web parts" -ForegroundColor Green
+    
+    # Create XML document
+    $xmlDoc = New-Object System.Xml.XmlDocument
+    $xmlDeclaration = $xmlDoc.CreateXmlDeclaration("1.0", "UTF-8", $null)
+    $xmlDoc.AppendChild($xmlDeclaration) | Out-Null
+    
+    # Root element
+    $rootElement = $xmlDoc.CreateElement("SharePointPageInfo")
+    $xmlDoc.AppendChild($rootElement) | Out-Null
+    
+    # Page Properties
+    Write-Host "`nExtracting page properties..." -ForegroundColor Yellow
+    $pagePropsElement = $xmlDoc.CreateElement("PageProperties")
+    $rootElement.AppendChild($pagePropsElement) | Out-Null
+    
+    # Basic page info
+    $pagePropsElement.AppendChild($xmlDoc.CreateElement("PageUrl")).InnerText = $PageUrl
+    $pagePropsElement.AppendChild($xmlDoc.CreateElement("ServerRelativeUrl")).InnerText = $serverRelativePageUrl
+    $pagePropsElement.AppendChild($xmlDoc.CreateElement("SiteTitle")).InnerText = $web.Title
+    $pagePropsElement.AppendChild($xmlDoc.CreateElement("SiteUrl")).InnerText = $web.Url
+    
+    if ($pageFile.Name) {
+        $pagePropsElement.AppendChild($xmlDoc.CreateElement("FileName")).InnerText = $pageFile.Name
+    }
+    if ($pageFile.Length) {
+        $pagePropsElement.AppendChild($xmlDoc.CreateElement("FileSize")).InnerText = $pageFile.Length.ToString()
+    }
+    if ($pageFile.TimeCreated) {
+        $pagePropsElement.AppendChild($xmlDoc.CreateElement("FileCreated")).InnerText = $pageFile.TimeCreated.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }
+    if ($pageFile.TimeLastModified) {
+        $pagePropsElement.AppendChild($xmlDoc.CreateElement("FileModified")).InnerText = $pageFile.TimeLastModified.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }
+    
+    # Page list item properties
+    if ($page) {
+        if ($page["Title"]) {
+            $pagePropsElement.AppendChild($xmlDoc.CreateElement("PageTitle")).InnerText = $page["Title"].ToString()
+        }
+        if ($page["ID"]) {
+            $pagePropsElement.AppendChild($xmlDoc.CreateElement("PageID")).InnerText = $page["ID"].ToString()
+        }
+        if ($page["Created"]) {
+            $pagePropsElement.AppendChild($xmlDoc.CreateElement("Created")).InnerText = ([DateTime]$page["Created"]).ToString("yyyy-MM-ddTHH:mm:ssZ")
+        }
+        if ($page["Modified"]) {
+            $pagePropsElement.AppendChild($xmlDoc.CreateElement("Modified")).InnerText = ([DateTime]$page["Modified"]).ToString("yyyy-MM-ddTHH:mm:ssZ")
+        }
+        if ($page["Author"] -and $page["Author"].LookupValue) {
+            $pagePropsElement.AppendChild($xmlDoc.CreateElement("CreatedBy")).InnerText = $page["Author"].LookupValue
+        }
+        if ($page["Editor"] -and $page["Editor"].LookupValue) {
+            $pagePropsElement.AppendChild($xmlDoc.CreateElement("ModifiedBy")).InnerText = $page["Editor"].LookupValue
+        }
+    }
+    
+    # Web Parts
+    Write-Host "`nExtracting web parts..." -ForegroundColor Yellow
+    $webPartsElement = $xmlDoc.CreateElement("WebParts")
+    $webPartsElement.SetAttribute("Count", $webParts.Count.ToString())
+    $rootElement.AppendChild($webPartsElement) | Out-Null
+    
+    $counter = 0
+    foreach ($wp in $webParts) {
+        $counter++
+        Write-Host "Processing web part $counter of $($webParts.Count): $($wp.WebPart.Title)" -ForegroundColor Cyan
+        
+        $webPartElement = $xmlDoc.CreateElement("WebPart")
+        $webPartElement.SetAttribute("Index", $counter.ToString())
+        $webPartsElement.AppendChild($webPartElement) | Out-Null
+        
+        # Basic web part properties
+        if ($wp.Id) {
+            $webPartElement.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $wp.Id.ToString()
+        }
+        if ($wp.ZoneId) {
+            $webPartElement.AppendChild($xmlDoc.CreateElement("ZoneId")).InnerText = $wp.ZoneId
+        }
+        if ($wp.ZoneIndex -ne $null) {
+            $webPartElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $wp.ZoneIndex.ToString()
+        }
+        
+        # Web part object properties
+        if ($wp.WebPart) {
+            if ($wp.WebPart.Title) {
+                $webPartElement.AppendChild($xmlDoc.CreateElement("Title")).InnerText = $wp.WebPart.Title
+            }
+            if ($wp.WebPart.TitleUrl) {
+                $webPartElement.AppendChild($xmlDoc.CreateElement("TitleUrl")).InnerText = $wp.WebPart.TitleUrl
+            }
+            if ($wp.WebPart.ExportMode) {
+                $webPartElement.AppendChild($xmlDoc.CreateElement("ExportMode")).InnerText = $wp.WebPart.ExportMode.ToString()
+            }
+        }
+        
+        # Get web part XML
+        Write-Host "  Getting XML for web part: $($wp.WebPart.Title)" -ForegroundColor Gray
+        try {
+            $webPartXml = Get-PnPWebPartXml -ServerRelativePageUrl $serverRelativePageUrl -Identity $wp.Id
+            
+            if ($webPartXml) {
+                Write-Host "  Successfully retrieved XML ($($webPartXml.Length) characters)" -ForegroundColor Green
+                
+                # Save full XML
+                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartXML")).InnerText = $webPartXml
+                
+                # Parse XML to get type and content
+                $xmlDoc2 = New-Object System.Xml.XmlDocument
+                $xmlDoc2.LoadXml($webPartXml)
+                
+                # Detect web part type
+                $webPartType = "Unknown"
+                $actualTypeName = $null
+                
+                # Check for v2 format (ContentEditor style)
+                $typeNameNodes = $xmlDoc2.SelectNodes("//TypeName")
+                if ($typeNameNodes.Count -gt 0) {
+                    $actualTypeName = $typeNameNodes[0].InnerText
+                    $webPartType = "WebPart_v2"
+                    Write-Host "  Found v2 WebPart: $actualTypeName" -ForegroundColor Green
+                }
+                # Check for v3 format (ListView style)
+                elseif ($xmlDoc2.SelectNodes("//webParts").Count -gt 0 -or $xmlDoc2.SelectNodes("//webPart").Count -gt 0) {
+                    $typeNodes = $xmlDoc2.SelectNodes("//type/@name")
+                    if ($typeNodes.Count -gt 0) {
+                        $actualTypeName = $typeNodes[0].Value
+                        $webPartType = "webPart_v3"
+                        Write-Host "  Found v3 webPart: $actualTypeName" -ForegroundColor Green
+                    }
+                }
+                
+                $webPartElement.AppendChild($xmlDoc.CreateElement("WebPartFormat")).InnerText = $webPartType
+                if ($actualTypeName) {
+                    $webPartElement.AppendChild($xmlDoc.CreateElement("ActualTypeName")).InnerText = $actualTypeName
+                }
+                
+                # Extract Content Editor Web Part content
+                if ($actualTypeName -and $actualTypeName -like "*ContentEditorWebPart*") {
+                    Write-Host "  Extracting CEWP content..." -ForegroundColor Green
+                    
+                    # Look for Content in ContentEditor namespace
+                    $namespaceManager = New-Object System.Xml.XmlNamespaceManager($xmlDoc2.NameTable)
+                    $namespaceManager.AddNamespace("ce", "http://schemas.microsoft.com/WebPart/v2/ContentEditor")
+                    $ceContentNodes = $xmlDoc2.SelectNodes("//ce:Content", $namespaceManager)
+                    
+                    if ($ceContentNodes.Count -gt 0) {
+                        $cewpContent = $ceContentNodes[0].InnerText
+                        if ($cewpContent -and -not [string]::IsNullOrWhiteSpace($cewpContent)) {
+                            $webPartElement.AppendChild($xmlDoc.CreateElement("CEWPContent")).InnerText = $cewpContent
+                            Write-Host "  Successfully extracted CEWP content ($($cewpContent.Length) characters)" -ForegroundColor Green
+                        }
+                    }
+                    
+                    # Look for ContentLink
+                    $ceLinkNodes = $xmlDoc2.SelectNodes("//ce:ContentLink", $namespaceManager)
+                    if ($ceLinkNodes.Count -gt 0 -and $ceLinkNodes[0].InnerText) {
+                        $webPartElement.AppendChild($xmlDoc.CreateElement("CEWPContentLink")).InnerText = $ceLinkNodes[0].InnerText
+                    }
+                }
+                
+                # Extract ListView properties
+                elseif ($actualTypeName -and ($actualTypeName -like "*ListViewWebPart*" -or $actualTypeName -like "*XsltListViewWebPart*")) {
+                    Write-Host "  Extracting ListView properties..." -ForegroundColor Green
+                    
+                    # Get ListId from XML
+                    $listIdNodes = $xmlDoc2.SelectNodes("//property[@name='ListId']")
+                    if ($listIdNodes.Count -gt 0 -and $listIdNodes[0].InnerText) {
+                        $webPartElement.AppendChild($xmlDoc.CreateElement("ListId")).InnerText = $listIdNodes[0].InnerText
+                    }
+                    
+                    # Get ListName from XML
+                    $listNameNodes = $xmlDoc2.SelectNodes("//property[@name='ListName']")
+                    if ($listNameNodes.Count -gt 0 -and $listNameNodes[0].InnerText) {
+                        $webPartElement.AppendChild($xmlDoc.CreateElement("ListName")).InnerText = $listNameNodes[0].InnerText
+                    }
+                    
+                    # Get TitleUrl from XML
+                    $titleUrlNodes = $xmlDoc2.SelectNodes("//property[@name='TitleUrl']")
+                    if ($titleUrlNodes.Count -gt 0 -and $titleUrlNodes[0].InnerText) {
+                        $webPartElement.AppendChild($xmlDoc.CreateElement("ListTitleUrl")).InnerText = $titleUrlNodes[0].InnerText
+                    }
+                }
+            }
+            else {
+                Write-Warning "  Could not retrieve XML for web part: $($wp.WebPart.Title)"
+                $webPartElement.AppendChild($xmlDoc.CreateElement("XMLStatus")).InnerText = "Could not retrieve XML"
+            }
+        }
+        catch {
+            Write-Warning "  Error getting XML for web part: $($_.Exception.Message)"
+            $webPartElement.AppendChild($xmlDoc.CreateElement("XMLError")).InnerText = $_.Exception.Message
+        }
+    }
+    
+    # Generate output filename with timestamp
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $outputFileName = "SharePoint_PageInfo_$timestamp.xml"
+    $outputPath = Join-Path $OutputFolder $outputFileName
+    
+    # Save XML to file
+    $xmlDoc.Save($outputPath)
+    
+    Write-Host "`n=== EXTRACTION COMPLETE ===" -ForegroundColor Green
+    Write-Host "Page: $($page['Title'])" -ForegroundColor White
+    Write-Host "Web Parts Found: $($webParts.Count)" -ForegroundColor White
+    Write-Host "Output saved to: $outputPath" -ForegroundColor Yellow
+    
+    # Show web part summary
+    Write-Host "`n=== WEB PARTS SUMMARY ===" -ForegroundColor Cyan
+    $counter = 0
+    foreach ($wp in $webParts) {
+        $counter++
+        $title = if ($wp.WebPart.Title) { $wp.WebPart.Title } else { "No Title" }
+        $zone = if ($wp.ZoneId) { $wp.ZoneId } else { "No Zone" }
+        Write-Host "$counter. $title (Zone: $zone, ID: $($wp.Id))" -ForegroundColor White
+    }
+}
+catch {
+    Write-Error "An error occurred: $($_.Exception.Message)"
+    Write-Host "Stack Trace: $($_.Exception.StackTrace)" -ForegroundColor Red
+}
+
+Write-Host "`nScript execution completed." -ForegroundColor Green
