@@ -52,6 +52,13 @@ try {
             throw "Page file not found: $PageUrl"
         }
         Write-Host "Page file retrieved successfully: $($pageFile.Name)" -ForegroundColor Green
+        
+        # Debug information
+        Write-Host "Page file details:" -ForegroundColor Cyan
+        Write-Host "  Name: $($pageFile.Name)" -ForegroundColor White
+        Write-Host "  ServerRelativeUrl: $($pageFile.ServerRelativeUrl)" -ForegroundColor White
+        Write-Host "  Length: $($pageFile.Length)" -ForegroundColor White
+        Write-Host "  Exists: $($pageFile.Exists)" -ForegroundColor White
     }
     catch {
         throw "Failed to retrieve page file '$PageUrl': $($_.Exception.Message)"
@@ -270,8 +277,38 @@ try {
     
     Write-Host "Retrieving web parts information..." -ForegroundColor Yellow
     try {
+        # Construct the server relative URL for the page
+        $serverRelativePageUrl = $null
+        
+        if ($pageFile -and $pageFile.ServerRelativeUrl) {
+            $serverRelativePageUrl = $pageFile.ServerRelativeUrl
+            Write-Host "Using page ServerRelativeUrl: $serverRelativePageUrl" -ForegroundColor Green
+        }
+        else {
+            # Construct the URL manually
+            if ($web -and $web.ServerRelativeUrl) {
+                if ($web.ServerRelativeUrl -eq "/") {
+                    $serverRelativePageUrl = "/$PageUrl"
+                }
+                else {
+                    $serverRelativePageUrl = "$($web.ServerRelativeUrl)/$PageUrl"
+                }
+                Write-Host "Constructed ServerRelativeUrl: $serverRelativePageUrl" -ForegroundColor Yellow
+            }
+            else {
+                # Last resort - use just the page URL
+                $serverRelativePageUrl = "/$PageUrl"
+                Write-Host "Using fallback ServerRelativeUrl: $serverRelativePageUrl" -ForegroundColor Yellow
+            }
+        }
+        
+        if ([string]::IsNullOrEmpty($serverRelativePageUrl)) {
+            throw "Could not determine server relative URL for the page"
+        }
+        
         # For SharePoint 2016 classic pages, get web parts using Get-PnPWebPart
-        $classicWebParts = Get-PnPWebPart -ServerRelativePageUrl $pageFile.ServerRelativeUrl -ErrorAction Stop
+        Write-Host "Getting web parts from: $serverRelativePageUrl" -ForegroundColor Yellow
+        $classicWebParts = Get-PnPWebPart -ServerRelativePageUrl $serverRelativePageUrl -ErrorAction Stop
         
         if ($classicWebParts -and $classicWebParts.Count -gt 0) {
             Write-Host "Found $($classicWebParts.Count) web parts" -ForegroundColor Green
