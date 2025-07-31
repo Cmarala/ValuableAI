@@ -1,5 +1,4 @@
 using System;
-using System.Security;
 using Microsoft.SharePoint.Client;
 using Microsoft.SharePoint.Client.WebParts;
 using OfficeDevPnP.Core;
@@ -20,19 +19,14 @@ namespace SharePointWebPartReader
             
             try
             {
-                // Get credentials for WebLogin authentication
-                Console.Write("Enter username: ");
-                string username = Console.ReadLine();
-                
-                Console.Write("Enter password: ");
-                SecureString password = GetSecurePassword();
-                
+                Console.WriteLine("Connecting to SharePoint with MFA-enabled WebLogin...");
+                Console.WriteLine("A browser window will open for authentication.");
                 Console.WriteLine();
-                Console.WriteLine("Connecting to SharePoint...");
                 
-                // Create ClientContext using PnP AuthenticationManager for WebLogin
+                // Create ClientContext using PnP AuthenticationManager for WebLogin with MFA support
+                // This will open a browser window for interactive login including MFA
                 AuthenticationManager authManager = new AuthenticationManager();
-                using (ClientContext context = authManager.GetWebLoginClientContext(siteUrl, username, password))
+                using (ClientContext context = authManager.GetWebLoginClientContext(siteUrl))
                 {
                     // Load web and site information
                     Web web = context.Web;
@@ -112,35 +106,6 @@ namespace SharePointWebPartReader
             Console.ReadKey();
         }
         
-        /// <summary>
-        /// Securely reads password input from console
-        /// </summary>
-        /// <returns>SecureString containing the password</returns>
-        private static SecureString GetSecurePassword()
-        {
-            SecureString securePassword = new SecureString();
-            ConsoleKeyInfo keyInfo;
-            
-            do
-            {
-                keyInfo = Console.ReadKey(true);
-                
-                if (keyInfo.Key != ConsoleKey.Backspace && keyInfo.Key != ConsoleKey.Enter)
-                {
-                    securePassword.AppendChar(keyInfo.KeyChar);
-                    Console.Write("*");
-                }
-                else if (keyInfo.Key == ConsoleKey.Backspace && securePassword.Length > 0)
-                {
-                    securePassword.RemoveAt(securePassword.Length - 1);
-                    Console.Write("\b \b");
-                }
-            }
-            while (keyInfo.Key != ConsoleKey.Enter);
-            
-            Console.WriteLine();
-            securePassword.MakeReadOnly();
-            return securePassword;
-        }
+
     }
 }
