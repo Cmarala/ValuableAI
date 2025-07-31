@@ -377,120 +377,133 @@ try {
                             }
                         }
                         
-                        # Get ALL properties from the actual WebPart object using reflection
-                        if ($webPart.WebPart) {
-                            $webPartObjectElement = $xmlDoc.CreateElement("WebPartObjectProperties")
-                            $webPartElement.AppendChild($webPartObjectElement) | Out-Null
+                                                 # Get web part properties - need to load them first
+                         if ($webPart.WebPart) {
+                             Write-Host "Processing web part: $($webPart.WebPart.Title)" -ForegroundColor Cyan
+                             
+                             # Load the Properties collection
+                             try {
+                                 $context = Get-PnPContext
+                                 $context.Load($webPart.WebPart.Properties)
+                                 $context.ExecuteQuery()
+                             }
+                             catch {
+                                 Write-Warning "Could not load web part properties: $($_.Exception.Message)"
+                             }
+                             
+                             $webPartObjectElement = $xmlDoc.CreateElement("WebPartObjectProperties")
+                             $webPartElement.AppendChild($webPartObjectElement) | Out-Null
+                             
+                             # Basic web part properties
+                             if ($webPart.WebPart.Title) {
+                                 $webPartObjectElement.AppendChild($xmlDoc.CreateElement("Title")).InnerText = $webPart.WebPart.Title
+                             }
+                             if ($webPart.WebPart.TitleUrl) {
+                                 $webPartObjectElement.AppendChild($xmlDoc.CreateElement("TitleUrl")).InnerText = $webPart.WebPart.TitleUrl
+                             }
+                             if ($webPart.WebPart.ZoneIndex -ne $null) {
+                                 $webPartObjectElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $webPart.WebPart.ZoneIndex.ToString()
+                             }
+                             if ($webPart.WebPart.ExportMode) {
+                                 $webPartObjectElement.AppendChild($xmlDoc.CreateElement("ExportMode")).InnerText = $webPart.WebPart.ExportMode.ToString()
+                             }
+                             
+                             # Get all properties from the Properties collection
+                             if ($webPart.WebPart.Properties -and $webPart.WebPart.Properties.FieldValues) {
+                                 $propertiesElement = $xmlDoc.CreateElement("DetailedProperties")
+                                 $webPartObjectElement.AppendChild($propertiesElement) | Out-Null
+                                 
+                                 foreach ($propKey in $webPart.WebPart.Properties.FieldValues.Keys) {
+                                     try {
+                                         $propValue = $webPart.WebPart.Properties.FieldValues[$propKey]
+                                         if ($propValue -ne $null -and $propValue -ne "") {
+                                             $propElement = $xmlDoc.CreateElement("Property")
+                                             $propertiesElement.AppendChild($propElement) | Out-Null
+                                             $propElement.SetAttribute("Name", $propKey)
+                                             
+                                             # Handle different property types
+                                             if ($propValue -is [System.String]) {
+                                                 $propElement.InnerText = $propValue
+                                             }
+                                             elseif ($propValue -is [System.Boolean]) {
+                                                 $propElement.InnerText = $propValue.ToString()
+                                             }
+                                             elseif ($propValue -is [System.Int32] -or $propValue -is [System.Int64]) {
+                                                 $propElement.InnerText = $propValue.ToString()
+                                             }
+                                             elseif ($propValue -is [System.Guid]) {
+                                                 $propElement.InnerText = $propValue.ToString()
+                                             }
+                                             else {
+                                                 $propElement.InnerText = $propValue.ToString()
+                                             }
+                                         }
+                                     }
+                                     catch {
+                                         Write-Warning "Could not process property '$propKey': $($_.Exception.Message)"
+                                     }
+                                 }
+                             }
+                             
+                             # Try to get the actual web part type by examining properties
+                             $webPartTypeElement = $xmlDoc.CreateElement("WebPartTypeInfo")
+                             $webPartObjectElement.AppendChild($webPartTypeElement) | Out-Null
+                             
+                             # Determine web part type based on properties
+                             $detectedType = "Unknown"
+                             $typeProperties = @{}
+                             
+                             if ($webPart.WebPart.Properties -and $webPart.WebPart.Properties.FieldValues) {
+                                 $props = $webPart.WebPart.Properties.FieldValues
+                                 
+                                 # Check for List View Web Part
+                                 if ($props.ContainsKey("ListName") -or $props.ContainsKey("ListId") -or $props.ContainsKey("ViewGuid")) {
+                                     $detectedType = "ListView"
+                                     if ($props["ListName"]) { $typeProperties["ListName"] = $props["ListName"] }
+                                     if ($props["ListId"]) { $typeProperties["ListId"] = $props["ListId"] }
+                                     if ($props["ViewGuid"]) { $typeProperties["ViewGuid"] = $props["ViewGuid"] }
+                                     if ($props["ListUrl"]) { $typeProperties["ListUrl"] = $props["ListUrl"] }
+                                     if ($props["ViewFlags"]) { $typeProperties["ViewFlags"] = $props["ViewFlags"] }
+                                     if ($props["XslLink"]) { $typeProperties["XslLink"] = $props["XslLink"] }
+                                 }
+                                 # Check for Content Editor Web Part
+                                 elseif ($props.ContainsKey("Content") -or $props.ContainsKey("ContentLink")) {
+                                     $detectedType = "ContentEditor"
+                                     if ($props["Content"]) { $typeProperties["Content"] = $props["Content"] }
+                                     if ($props["ContentLink"]) { $typeProperties["ContentLink"] = $props["ContentLink"] }
+                                 }
+                                 # Check for Script Editor Web Part
+                                 elseif ($props.ContainsKey("Content") -and $webPart.WebPart.Title -like "*Script*") {
+                                     $detectedType = "ScriptEditor"
+                                     if ($props["Content"]) { $typeProperties["ScriptContent"] = $props["Content"] }
+                                 }
+                                 # Check for Image Web Part
+                                 elseif ($props.ContainsKey("ImageLink") -or $props.ContainsKey("AlternativeText")) {
+                                     $detectedType = "Image"
+                                     if ($props["ImageLink"]) { $typeProperties["ImageLink"] = $props["ImageLink"] }
+                                     if ($props["AlternativeText"]) { $typeProperties["AlternativeText"] = $props["AlternativeText"] }
+                                 }
+                                 # Check for Page Viewer Web Part
+                                 elseif ($props.ContainsKey("SourceType") -or $props.ContainsKey("ContentLink")) {
+                                     $detectedType = "PageViewer"
+                                     if ($props["SourceType"]) { $typeProperties["SourceType"] = $props["SourceType"] }
+                                     if ($props["ContentLink"]) { $typeProperties["ContentLink"] = $props["ContentLink"] }
+                                 }
+                             }
+                             
+                             $webPartTypeElement.AppendChild($xmlDoc.CreateElement("DetectedType")).InnerText = $detectedType
+                             
+                             # Add type-specific properties
+                             if ($typeProperties.Count -gt 0) {
+                                 $typeSpecificElement = $xmlDoc.CreateElement("TypeSpecificProperties")
+                                 $webPartTypeElement.AppendChild($typeSpecificElement) | Out-Null
+                                 
+                                 foreach ($key in $typeProperties.Keys) {
+                                     $typeSpecificElement.AppendChild($xmlDoc.CreateElement($key)).InnerText = $typeProperties[$key].ToString()
+                                 }
+                             }
                             
-                            # Get all properties from the WebPart object
-                            $webPartProperties = $webPart.WebPart | Get-Member -MemberType Property
-                            foreach ($prop in $webPartProperties) {
-                                try {
-                                    $propValue = $webPart.WebPart.($prop.Name)
-                                    if ($propValue -ne $null -and $propValue -ne "") {
-                                        $propElement = $xmlDoc.CreateElement($prop.Name)
-                                        $webPartObjectElement.AppendChild($propElement) | Out-Null
-                                        
-                                        # Handle different property types
-                                        if ($propValue -is [System.Guid]) {
-                                            $propElement.InnerText = $propValue.ToString()
-                                        }
-                                        elseif ($propValue -is [System.Boolean]) {
-                                            $propElement.InnerText = $propValue.ToString()
-                                        }
-                                        elseif ($propValue -is [System.Int32] -or $propValue -is [System.Int64]) {
-                                            $propElement.InnerText = $propValue.ToString()
-                                        }
-                                        elseif ($propValue -is [System.String]) {
-                                            $propElement.InnerText = $propValue
-                                        }
-                                        elseif ($propValue -is [System.Xml.XmlNode]) {
-                                            # For XML content, get the outer XML
-                                            $propElement.InnerText = $propValue.OuterXml
-                                        }
-                                        elseif ($propValue.GetType().IsEnum) {
-                                            $propElement.InnerText = $propValue.ToString()
-                                        }
-                                        elseif ($propValue -is [System.Collections.IEnumerable] -and $propValue -isnot [System.String]) {
-                                            # For collections, create child elements
-                                            $collectionElement = $xmlDoc.CreateElement("Collection")
-                                            $propElement.AppendChild($collectionElement) | Out-Null
-                                            $index = 0
-                                            foreach ($item in $propValue) {
-                                                $itemElement = $xmlDoc.CreateElement("Item$index")
-                                                $collectionElement.AppendChild($itemElement) | Out-Null
-                                                $itemElement.InnerText = $item.ToString()
-                                                $index++
-                                            }
-                                        }
-                                        else {
-                                            # For complex objects, try to get string representation
-                                            $propElement.InnerText = $propValue.ToString()
-                                        }
-                                    }
-                                }
-                                catch {
-                                    # Skip properties that can't be accessed or add error info
-                                    try {
-                                        $errorElement = $xmlDoc.CreateElement($prop.Name + "_Error")
-                                        $webPartObjectElement.AppendChild($errorElement) | Out-Null
-                                        $errorElement.InnerText = "Error accessing property: $($_.Exception.Message)"
-                                    }
-                                    catch {
-                                        Write-Warning "Could not access WebPart property '$($prop.Name)': $($_.Exception.Message)"
-                                    }
-                                }
-                            }
                             
-                            # Try to get specific properties for common web part types
-                            $webPartTypeName = $webPart.WebPart.GetType().Name
-                            $specificPropsElement = $xmlDoc.CreateElement("SpecificTypeProperties")
-                            $webPartObjectElement.AppendChild($specificPropsElement) | Out-Null
-                            
-                            switch ($webPartTypeName) {
-                                "ContentEditorWebPart" {
-                                    try {
-                                        if ($webPart.WebPart.Content) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("Content")).InnerText = $webPart.WebPart.Content.InnerText
-                                        }
-                                        if ($webPart.WebPart.ContentLink) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("ContentLink")).InnerText = $webPart.WebPart.ContentLink
-                                        }
-                                    } catch { }
-                                }
-                                "XsltListViewWebPart" {
-                                    try {
-                                        if ($webPart.WebPart.ListName) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("ListName")).InnerText = $webPart.WebPart.ListName
-                                        }
-                                        if ($webPart.WebPart.ViewGuid) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("ViewGuid")).InnerText = $webPart.WebPart.ViewGuid.ToString()
-                                        }
-                                    } catch { }
-                                }
-                                "ScriptEditorWebPart" {
-                                    try {
-                                        if ($webPart.WebPart.Content) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("Script")).InnerText = $webPart.WebPart.Content
-                                        }
-                                    } catch { }
-                                }
-                                "ImageWebPart" {
-                                    try {
-                                        if ($webPart.WebPart.ImageLink) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("ImageLink")).InnerText = $webPart.WebPart.ImageLink
-                                        }
-                                        if ($webPart.WebPart.AlternativeText) {
-                                            $specificPropsElement.AppendChild($xmlDoc.CreateElement("AlternativeText")).InnerText = $webPart.WebPart.AlternativeText
-                                        }
-                                    } catch { }
-                                }
-                            }
-                            
-                            # Remove SpecificTypeProperties element if it's empty
-                            if (-not $specificPropsElement.HasChildNodes) {
-                                $webPartObjectElement.RemoveChild($specificPropsElement) | Out-Null
-                            }
                         }
                     }
                     catch {
