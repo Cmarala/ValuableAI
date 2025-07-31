@@ -342,122 +342,113 @@ try {
                         $webPartElement = $xmlDoc.CreateElement("WebPart")
                         $zoneElement.AppendChild($webPartElement) | Out-Null
                         
-                                                 # Basic web part information
-                         if ($webPart.Id) {
-                             $webPartElement.AppendChild($xmlDoc.CreateElement("Id")).InnerText = $webPart.Id.ToString()
-                         }
+                                                 # Get ALL properties from the web part wrapper object
+                         $wrapperPropsElement = $xmlDoc.CreateElement("WebPartWrapperProperties")
+                         $webPartElement.AppendChild($wrapperPropsElement) | Out-Null
                          
-                         # Layout Properties
-                         $layoutElement = $xmlDoc.CreateElement("LayoutProperties")
-                         $webPartElement.AppendChild($layoutElement) | Out-Null
-                         
-                         if ($webPart.ZoneIndex -ne $null) {
-                             $layoutElement.AppendChild($xmlDoc.CreateElement("ZoneIndex")).InnerText = $webPart.ZoneIndex.ToString()
-                         }
-                         
-                         if ($webPart.ZoneId) {
-                             $layoutElement.AppendChild($xmlDoc.CreateElement("ZoneId")).InnerText = $webPart.ZoneId
-                         }
-                         
-                         # Try to get additional layout properties
-                         try {
-                             if ($webPart.WebPart -and $webPart.WebPart.Zone) {
-                                 $layoutElement.AppendChild($xmlDoc.CreateElement("ZoneName")).InnerText = $webPart.WebPart.Zone.ID
+                         # Get all properties from the wrapper object using reflection
+                         $wrapperProperties = $webPart | Get-Member -MemberType Property
+                         foreach ($prop in $wrapperProperties) {
+                             try {
+                                 $propValue = $webPart.($prop.Name)
+                                 if ($propValue -ne $null -and $propValue -ne "") {
+                                     $propElement = $xmlDoc.CreateElement($prop.Name)
+                                     $wrapperPropsElement.AppendChild($propElement) | Out-Null
+                                     
+                                     # Handle different property types
+                                     if ($propValue -is [System.Guid]) {
+                                         $propElement.InnerText = $propValue.ToString()
+                                     }
+                                     elseif ($propValue -is [System.Boolean]) {
+                                         $propElement.InnerText = $propValue.ToString()
+                                     }
+                                     elseif ($propValue -is [System.Int32] -or $propValue -is [System.Int64]) {
+                                         $propElement.InnerText = $propValue.ToString()
+                                     }
+                                     elseif ($propValue -is [System.String]) {
+                                         $propElement.InnerText = $propValue
+                                     }
+                                     else {
+                                         # For complex objects, try to get string representation
+                                         $propElement.InnerText = $propValue.ToString()
+                                     }
+                                 }
                              }
-                         } catch { }
-                         
-                         try {
-                             if ($webPart.WebPart -and $webPart.WebPart.IsIncluded -ne $null) {
-                                 $layoutElement.AppendChild($xmlDoc.CreateElement("IsIncluded")).InnerText = $webPart.WebPart.IsIncluded.ToString()
+                             catch {
+                                 # Skip properties that can't be accessed
+                                 Write-Warning "Could not access wrapper property '$($prop.Name)': $($_.Exception.Message)"
                              }
-                         } catch { }
-                         
-                         try {
-                             if ($webPart.WebPart -and $webPart.WebPart.IsClosed -ne $null) {
-                                 $layoutElement.AppendChild($xmlDoc.CreateElement("IsClosed")).InnerText = $webPart.WebPart.IsClosed.ToString()
-                             }
-                         } catch { }
+                         }
                         
-                        # Web part object properties
-                        if ($webPart.WebPart) {
-                            $webPartDetailsElement = $xmlDoc.CreateElement("WebPartDetails")
-                            $webPartElement.AppendChild($webPartDetailsElement) | Out-Null
-                            
-                            if ($webPart.WebPart.Title) {
-                                $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Title")).InnerText = $webPart.WebPart.Title
-                            }
-                            
-                            if ($webPart.WebPart.GetType()) {
-                                $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("WebPartType")).InnerText = $webPart.WebPart.GetType().Name
-                                $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("FullTypeName")).InnerText = $webPart.WebPart.GetType().FullName
-                            }
-                            
-                            # Try to get common web part properties
-                            try {
-                                if ($webPart.WebPart.Description) {
-                                    $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Description")).InnerText = $webPart.WebPart.Description
-                                }
-                            } catch { }
-                            
-                            try {
-                                if ($webPart.WebPart.Hidden -ne $null) {
-                                    $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Hidden")).InnerText = $webPart.WebPart.Hidden.ToString()
-                                }
-                            } catch { }
-                            
-                            try {
-                                if ($webPart.WebPart.ChromeType) {
-                                    $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("ChromeType")).InnerText = $webPart.WebPart.ChromeType.ToString()
-                                }
-                            } catch { }
-                            
-                            try {
-                                if ($webPart.WebPart.Width) {
-                                    $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Width")).InnerText = $webPart.WebPart.Width.ToString()
-                                }
-                            } catch { }
-                            
-                                                         try {
-                                 if ($webPart.WebPart.Height) {
-                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("Height")).InnerText = $webPart.WebPart.Height.ToString()
-                                 }
-                             } catch { }
+                                                 # Get ALL properties from the actual WebPart object using reflection
+                         if ($webPart.WebPart) {
+                             $webPartObjectElement = $xmlDoc.CreateElement("WebPartObjectProperties")
+                             $webPartElement.AppendChild($webPartObjectElement) | Out-Null
                              
-                             # Additional layout and positioning properties
-                             try {
-                                 if ($webPart.WebPart.AllowZoneChange -ne $null) {
-                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowZoneChange")).InnerText = $webPart.WebPart.AllowZoneChange.ToString()
+                             # Get all properties from the WebPart object
+                             $webPartProperties = $webPart.WebPart | Get-Member -MemberType Property
+                             foreach ($prop in $webPartProperties) {
+                                 try {
+                                     $propValue = $webPart.WebPart.($prop.Name)
+                                     if ($propValue -ne $null -and $propValue -ne "") {
+                                         $propElement = $xmlDoc.CreateElement($prop.Name)
+                                         $webPartObjectElement.AppendChild($propElement) | Out-Null
+                                         
+                                         # Handle different property types
+                                         if ($propValue -is [System.Guid]) {
+                                             $propElement.InnerText = $propValue.ToString()
+                                         }
+                                         elseif ($propValue -is [System.Boolean]) {
+                                             $propElement.InnerText = $propValue.ToString()
+                                         }
+                                         elseif ($propValue -is [System.Int32] -or $propValue -is [System.Int64]) {
+                                             $propElement.InnerText = $propValue.ToString()
+                                         }
+                                         elseif ($propValue -is [System.String]) {
+                                             $propElement.InnerText = $propValue
+                                         }
+                                         elseif ($propValue -is [System.Xml.XmlNode]) {
+                                             # For XML content, get the outer XML
+                                             $propElement.InnerText = $propValue.OuterXml
+                                         }
+                                         elseif ($propValue.GetType().IsEnum) {
+                                             $propElement.InnerText = $propValue.ToString()
+                                         }
+                                         elseif ($propValue -is [System.Collections.IEnumerable] -and $propValue -isnot [System.String]) {
+                                             # For collections, create child elements
+                                             $collectionElement = $xmlDoc.CreateElement("Collection")
+                                             $propElement.AppendChild($collectionElement) | Out-Null
+                                             $index = 0
+                                             foreach ($item in $propValue) {
+                                                 $itemElement = $xmlDoc.CreateElement("Item$index")
+                                                 $collectionElement.AppendChild($itemElement) | Out-Null
+                                                 $itemElement.InnerText = $item.ToString()
+                                                 $index++
+                                             }
+                                         }
+                                         else {
+                                             # For complex objects, try to get string representation
+                                             $propElement.InnerText = $propValue.ToString()
+                                         }
+                                     }
                                  }
-                             } catch { }
-                             
-                             try {
-                                 if ($webPart.WebPart.AllowLayoutChange -ne $null) {
-                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowLayoutChange")).InnerText = $webPart.WebPart.AllowLayoutChange.ToString()
+                                 catch {
+                                     # Skip properties that can't be accessed or add error info
+                                     try {
+                                         $errorElement = $xmlDoc.CreateElement($prop.Name + "_Error")
+                                         $webPartObjectElement.AppendChild($errorElement) | Out-Null
+                                         $errorElement.InnerText = "Error accessing property: $($_.Exception.Message)"
+                                     }
+                                     catch {
+                                         Write-Warning "Could not access WebPart property '$($prop.Name)': $($_.Exception.Message)"
+                                     }
                                  }
-                             } catch { }
-                             
-                             try {
-                                 if ($webPart.WebPart.AllowMinimize -ne $null) {
-                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowMinimize")).InnerText = $webPart.WebPart.AllowMinimize.ToString()
-                                 }
-                             } catch { }
-                             
-                             try {
-                                 if ($webPart.WebPart.AllowClose -ne $null) {
-                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("AllowClose")).InnerText = $webPart.WebPart.AllowClose.ToString()
-                                 }
-                             } catch { }
-                             
-                             try {
-                                 if ($webPart.WebPart.ChromeState) {
-                                     $webPartDetailsElement.AppendChild($xmlDoc.CreateElement("ChromeState")).InnerText = $webPart.WebPart.ChromeState.ToString()
-                                 }
-                             } catch { }
+                             }
                             
-                            # Try to get specific properties for common web part types
-                            $webPartTypeName = $webPart.WebPart.GetType().Name
-                            $specificPropsElement = $xmlDoc.CreateElement("SpecificProperties")
-                            $webPartDetailsElement.AppendChild($specificPropsElement) | Out-Null
+                                                         # Try to get specific properties for common web part types
+                             $webPartTypeName = $webPart.WebPart.GetType().Name
+                             $specificPropsElement = $xmlDoc.CreateElement("SpecificTypeProperties")
+                             $webPartObjectElement.AppendChild($specificPropsElement) | Out-Null
                             
                             switch ($webPartTypeName) {
                                 "ContentEditorWebPart" {
@@ -499,10 +490,10 @@ try {
                                 }
                             }
                             
-                            # Remove SpecificProperties element if it's empty
-                            if (-not $specificPropsElement.HasChildNodes) {
-                                $webPartDetailsElement.RemoveChild($specificPropsElement) | Out-Null
-                            }
+                                                         # Remove SpecificTypeProperties element if it's empty
+                             if (-not $specificPropsElement.HasChildNodes) {
+                                 $webPartObjectElement.RemoveChild($specificPropsElement) | Out-Null
+                             }
                         }
                     }
                     catch {
